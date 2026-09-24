@@ -1,7 +1,7 @@
 {
   "Name": "Ulanzi D200 Windows",
   "Description": "Device support plugin for the Ulanzi Stream Controller D200 and D200H",
-  "Author": "glmagalhaes, mquest, mtesseract",
+  "Author": "glmagalhaes, mquest, mtesseract, Iwo24pl",
   "Version": "0.0.2",
   "PluginUUID": "com.iwo24pl.rs-d200-windows",
   "CodePathLin": "rs-ulanzi-d200-linux",
