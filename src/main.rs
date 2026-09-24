@@ -102,11 +102,23 @@ async fn main() -> Result<()> {
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(100);
         let (event_tx, mut event_rx) = tokio::sync::mpsc::channel(100);
 
-        let bridge = crate::openaction_client::OpenActionBridge::new(cmd_tx);
+        // Shared with OpenActionBridge so `plugin_ready` can re-register
+        // devices that connected before the websocket was ready.
+        let known_devices: crate::openaction_client::KnownDevices =
+            std::sync::Arc::new(tokio::sync::Mutex::new(Vec::new()));
+        let bridge = crate::openaction_client::OpenActionBridge::new(
+            cmd_tx,
+            known_devices.clone(),
+        );
         bridge.register();
 
+        let exe_name = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.file_name().map(|s| s.to_string_lossy().into_owned()))
+            .unwrap_or_else(|| "rs-ulanzi-d200-linux".to_string());
+
         let oa_args = vec![
-            "rs-ulanzi-d200-linux".to_string(),
+            exe_name,
             "-port".to_string(),
             port.to_string(),
             "-pluginUUID".to_string(),
@@ -130,7 +142,10 @@ async fn main() -> Result<()> {
         let cycle_action = action::CycleStatusWindow { cycle_tx: cycle_tx.clone() };
         register_action(cycle_action).await;
 
-        // Outbound events forwarder (unchanged)
+        // Outbound events forwarder: HID -> OpenDeck.
+        // NOTE: `register_device` is a silent no-op until `openaction::run`
+        // has connected (outbound manager not yet set). We therefore remember
+        // the ID first; `plugin_ready` re-registers from `known_devices`.
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
                 match event {
@@ -138,24 +153,37 @@ async fn main() -> Result<()> {
                         device_id,
                         key_index,
                     } => {
-                        let _ = openaction::device_plugin::key_down(device_id, key_index).await;
+                        if let Err(e) =
+                            openaction::device_plugin::key_down(device_id.clone(), key_index).await
+                        {
+                            warn!("key_down forward failed for {}: {}", device_id, e);
+                        }
                     }
                     daemon::HardwareEvent::KeyUp {
                         device_id,
                         key_index,
                     } => {
-                        let _ = openaction::device_plugin::key_up(device_id, key_index).await;
+                        if let Err(e) =
+                            openaction::device_plugin::key_up(device_id.clone(), key_index).await
+                        {
+                            warn!("key_up forward failed for {}: {}", device_id, e);
+                        }
                     }
                     daemon::HardwareEvent::DeviceConnected { device_id } => {
-                        let _ = openaction::device_plugin::register_device(
-                            device_id,
-                            "Ulanzi D200".to_string(),
-                            3,
-                            5,
+                        crate::openaction_client::remember_device(&known_devices, &device_id).await;
+                        info!("Registering device {} with OpenDeck", device_id);
+                        if let Err(e) = openaction::device_plugin::register_device(
+                            device_id.clone(),
+                            crate::openaction_client::DEVICE_NAME.to_string(),
+                            crate::openaction_client::DEVICE_ROWS,
+                            crate::openaction_client::DEVICE_COLS,
                             0,
                             0,
                         )
-                        .await;
+                        .await
+                        {
+                            warn!("register_device failed for {}: {}", device_id, e);
+                        }
                     }
                 }
             }

@@ -5,7 +5,25 @@ use openaction::global_events::{
     SetBrightnessEvent, SetImageEvent,
 };
 use openaction::OpenActionResult;
-use tokio::sync::mpsc;
+use std::sync::Arc;
+use tokio::sync::{mpsc, Mutex};
+
+/// Device registration parameters shared between the forwarder and `plugin_ready`.
+pub const DEVICE_NAME: &str = "Ulanzi D200";
+pub const DEVICE_ROWS: u8 = 3;
+pub const DEVICE_COLS: u8 = 5;
+
+/// IDs of locally-attached devices, shared so `plugin_ready` can
+/// (re-)register devices whose initial `registerDevice` was sent before
+/// the OpenAction websocket was ready (silently dropped by `openaction`).
+pub type KnownDevices = Arc<Mutex<Vec<String>>>;
+
+pub async fn remember_device(devices: &KnownDevices, device_id: &str) {
+    let mut guard = devices.lock().await;
+    if !guard.iter().any(|d| d == device_id) {
+        guard.push(device_id.to_string());
+    }
+}
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -30,11 +48,12 @@ pub enum BridgeEvent {
 
 pub struct OpenActionBridge {
     pub tx: mpsc::Sender<BridgeEvent>,
+    pub known_devices: KnownDevices,
 }
 
 impl OpenActionBridge {
-    pub fn new(tx: mpsc::Sender<BridgeEvent>) -> Self {
-        Self { tx }
+    pub fn new(tx: mpsc::Sender<BridgeEvent>, known_devices: KnownDevices) -> Self {
+        Self { tx, known_devices }
     }
 
     pub fn register(self) {
@@ -47,6 +66,26 @@ impl OpenActionBridge {
 impl GlobalEventHandler for OpenActionBridge {
     async fn plugin_ready(&self) -> OpenActionResult<()> {
         info!("OpenAction Bridge: Plugin Ready");
+        // Re-register any devices that connected before the websocket was
+        // ready. The initial registerDevice in that window is a no-op inside
+        // `openaction` (outbound manager not yet set), which otherwise leaves
+        // OpenDeck stuck on "no device connected".
+        let devices = self.known_devices.lock().await.clone();
+        for device_id in devices {
+            info!("(Re-)registering device {} on plugin_ready", device_id);
+            if let Err(e) = openaction::device_plugin::register_device(
+                device_id.clone(),
+                DEVICE_NAME.to_string(),
+                DEVICE_ROWS,
+                DEVICE_COLS,
+                0,
+                0,
+            )
+            .await
+            {
+                info!("Failed to (re-)register device {}: {}", device_id, e);
+            }
+        }
         Ok(())
     }
 

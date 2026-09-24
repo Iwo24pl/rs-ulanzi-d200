@@ -1,5 +1,7 @@
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
+#[cfg(target_os = "linux")]
 use std::fs;
+#[cfg(target_os = "linux")]
 use std::path::Path;
 
 #[cfg(feature = "nvidia")]
@@ -51,9 +53,10 @@ impl SystemMonitor {
     }
 
     /// Returns the utilisation percentage of the first usable GPU.
-    /// Supports NVIDIA (via NVML) and AMD/Intel (via sysfs `gpu_busy_percent`).
+    /// Supports NVIDIA (via NVML) and, on Linux, AMD/Intel (via sysfs `gpu_busy_percent`).
+    /// On Windows, AMD/Intel GPUs currently report 0 (TODO: PDH/WMI/DXGI).
     fn get_gpu_load(&self) -> u8 {
-        // 1) Try NVIDIA GPUs through NVML
+        // 1) Try NVIDIA GPUs through NVML (cross-platform: nvml.dll on Windows)
         #[cfg(feature = "nvidia")]
         if let Some(nv) = &self.nvml {
             if let Ok(device_count) = nv.device_count() {
@@ -67,23 +70,26 @@ impl SystemMonitor {
             }
         }
 
-        // 2) Fallback: scan /sys/class/drm for AMD/Intel cards
-        let drm_path = Path::new("/sys/class/drm");
-        if let Ok(entries) = fs::read_dir(drm_path) {
-            for entry in entries.flatten() {
-                let name = entry.file_name().to_string_lossy().to_string();
-                // Only consider top‑level `cardN` entries
-                if name.starts_with("card") && name.chars().skip(4).all(|c| c.is_ascii_digit()) {
-                    // Detect vendor via PCI vendor ID
-                    let vendor_path = format!("/sys/class/drm/{}/device/vendor", name);
-                    if let Ok(vendor) = fs::read_to_string(&vendor_path) {
-                        let vendor = vendor.trim();
-                        // AMD or Intel → try gpu_busy_percent
-                        if vendor == "0x1002" || vendor == "0x8086" {
-                            let busy_path = format!("/sys/class/drm/{}/device/gpu_busy_percent", name);
-                            if let Ok(content) = fs::read_to_string(&busy_path) {
-                                if let Ok(load) = content.trim().parse::<f32>() {
-                                    return load as u8;
+        // 2) Fallback (Linux only): scan /sys/class/drm for AMD/Intel cards
+        #[cfg(target_os = "linux")]
+        {
+            let drm_path = Path::new("/sys/class/drm");
+            if let Ok(entries) = fs::read_dir(drm_path) {
+                for entry in entries.flatten() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    // Only consider top‑level `cardN` entries
+                    if name.starts_with("card") && name.chars().skip(4).all(|c| c.is_ascii_digit()) {
+                        // Detect vendor via PCI vendor ID
+                        let vendor_path = format!("/sys/class/drm/{}/device/vendor", name);
+                        if let Ok(vendor) = fs::read_to_string(&vendor_path) {
+                            let vendor = vendor.trim();
+                            // AMD or Intel → try gpu_busy_percent
+                            if vendor == "0x1002" || vendor == "0x8086" {
+                                let busy_path = format!("/sys/class/drm/{}/device/gpu_busy_percent", name);
+                                if let Ok(content) = fs::read_to_string(&busy_path) {
+                                    if let Ok(load) = content.trim().parse::<f32>() {
+                                        return load as u8;
+                                    }
                                 }
                             }
                         }

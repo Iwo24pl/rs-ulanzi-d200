@@ -5,10 +5,12 @@
   "Version": "0.6.5",
   "PluginUUID": "com.glmagalhaes.ulanzi.d200",
   "CodePathLin": "rs-ulanzi-d200-linux",
+  "CodePathWin": "rs-ulanzi-d200-linux.exe",
   "Icon": "assets/icon",
   "Category": "Ulanzi D200",
   "OS": [
-    { "Platform": "linux" }
+    { "Platform": "linux" },
+    { "Platform": "windows", "MinimumVersion": "10" }
   ],
   "Actions": [
     {

@@ -1,6 +1,14 @@
 ![OpenDeck Ulanzi D200 Driver Logo](src/assets/icon.png)
 
-# OpenDeck Ulanzi D200 Driver (Unofficial)
+# OpenDeck Ulanzi D200 Driver (Unofficial) — Windows Port
+
+> **Windows-only fork.** This is a community Windows port maintained at
+> [`Iwo24pl/rs-ulanzi-d200-windows`](https://github.com/Iwo24pl/rs-ulanzi-d200-windows).
+> Upstream Linux project:
+> [`glmagalhaes/rs-ulanzi-d200`](https://github.com/glmagalhaes/rs-ulanzi-d200)
+> (official source on
+> [GitLab](https://gitlab.com/glmagalhaes.mail/rs-ulanzi-d-200-linux)).
+> Please open Windows-port issues on this fork, not upstream.
 
 An unofficial plugin for [OpenDeck](https://github.com/nekename/OpenDeck) that adds support for the Ulanzi D200 and D200H devices.
 
@@ -23,9 +31,9 @@ The D200H is identical to the D200 but includes two additional USB hubs (Genesys
 
 | Platform | Status |
 |----------|--------|
-| Linux    | ✅ Supported (actively developed and tested) |
-| Windows  | ❌ Planned (see roadmap) |
-| macOS    | ❌ Planned (see roadmap) |
+| Windows  | ✅ Supported by this fork (tested on Windows 10/11) |
+| Linux    | ✅ Supported upstream |
+| macOS    | ❌ Planned upstream (see roadmap) |
 
 If you would like to help port the plugin to another platform, feel free to contribute!
 

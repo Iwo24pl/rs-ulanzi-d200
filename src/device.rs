@@ -136,6 +136,18 @@ impl UlanziDevice {
         let backend = HidBackend::default();
         let devices: Vec<_> = backend.enumerate().await?.collect().await;
 
+        // Diagnostic dump: on Windows (win32 HID) the same physical device
+        // can show up as multiple collections with different usage pages.
+        // This makes "device not found" debuggable from OpenDeck logs.
+        for d in &devices {
+            debug!(
+                "HID candidate: vid=0x{:04x} pid=0x{:04x} usage_page=0x{:04x} usage_id=0x{:04x} serial={:?} id={:?}",
+                d.vendor_id, d.product_id, d.usage_page, d.usage_id,
+                d.serial_number, d.id,
+            );
+        }
+
+        let device_count = devices.len();
         let device_info = devices
             .into_iter()
             .find(|d| {
@@ -143,7 +155,15 @@ impl UlanziDevice {
                     && d.product_id == PRODUCT_ID
                     && d.usage_page == USAGE_PAGE
             })
-            .ok_or_else(|| anyhow!("Ulanzi D200 device not found"))?;
+            .ok_or_else(|| {
+                anyhow!(
+                    "Ulanzi D200 device not found (vid=0x{:04x} pid=0x{:04x} usage_page=0x{:04x}, saw {} HID device(s); enable debug logs to list them)",
+                    VENDOR_ID,
+                    PRODUCT_ID,
+                    USAGE_PAGE,
+                    device_count
+                )
+            })?;
 
         let (reader, writer) = device_info.open().await?;
 
@@ -423,6 +443,22 @@ impl UlanziDevice {
     }
 
     // -- Low‑level packet I/O -----------------------------------------------
+    // Windows HID output reports include a leading Report-ID byte
+    // (async-hid strips it on read but does not add it on write).
+    // The D200 uses Report-ID 0, so every 1024B payload must go out as
+    // [0x00 + 1024B] = 1025B on Windows. Linux hidraw needs no prefix.
+    #[cfg(windows)]
+    fn output_report(packet: &[u8]) -> Vec<u8> {
+        let mut out = Vec::with_capacity(packet.len() + 1);
+        out.push(0x00);
+        out.extend_from_slice(packet);
+        out
+    }
+
+    #[cfg(not(windows))]
+    fn output_report(packet: &[u8]) -> Vec<u8> {
+        packet.to_vec()
+    }
 
     async fn send_command(&self, command: CommandProtocol, payload: &[u8]) -> Result<()> {
         if payload.len() > MAX_COMMAND_PAYLOAD {
@@ -433,7 +469,8 @@ impl UlanziDevice {
             ));
         }
         let packet = self.build_packet(command, payload, payload.len() as u32);
-        self.writer.lock().await.write_output_report(&packet).await?;
+        let report = Self::output_report(&packet);
+        self.writer.lock().await.write_output_report(&report).await?;
         Ok(())
     }
 
@@ -449,14 +486,18 @@ impl UlanziDevice {
             self.build_packet(CommandProtocol::OutSetButtons, first_chunk, file_size);
 
         let mut writer = self.writer.lock().await;
-        writer.write_output_report(&first_packet).await?;
+        writer
+            .write_output_report(&Self::output_report(&first_packet))
+            .await?;
 
         if data.len() > 1016 {
             for chunk in data[1016..].chunks(1024) {
                 let mut packet = [0u8; PACKET_SIZE];
                 let len = chunk.len().min(PACKET_SIZE);
                 packet[..len].copy_from_slice(&chunk[..len]);
-                writer.write_output_report(&packet).await?;
+                writer
+                    .write_output_report(&Self::output_report(&packet))
+                    .await?;
             }
         }
         Ok(())
