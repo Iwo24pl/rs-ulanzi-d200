@@ -40,6 +40,10 @@ pub struct UlanziDaemon {
     min_flush_interval: Duration,
     // Cycle command channel
     cycle_rx: mpsc::Receiver<()>,
+    // Last small-window frame sent (mode, cpu, mem, time, gpu).
+    // The D200 flickers if it receives redundant frames too fast
+    // (upstream 0.6.1), so the keep-alive skips unchanged frames.
+    last_window: Option<(u8, u8, u8, String, u8)>,
 }
 
 impl UlanziDaemon {
@@ -80,6 +84,7 @@ impl UlanziDaemon {
             debounce_delay: Duration::from_millis(50),
             min_flush_interval: Duration::from_millis(20),
             cycle_rx,
+            last_window: None,
         })
     }
 
@@ -227,22 +232,37 @@ impl UlanziDaemon {
                     self.perform_flush().await;
                 }
 
-                // Keep‑alive: update small window with current stats
+                // Keep‑alive: update small window with current stats.
+                // Send only when the frame actually changed (the clock ticks
+                // ~1/s, stats ~1/s) — redundant 10/s writes make the
+                // firmware display flicker.
                 _ = keep_alive_interval.tick() => {
                     use chrono::Local;
                     let now = Local::now();
                     let time_str = now.format("%H:%M:%S").to_string();
+                    let frame = (
+                        self.config.display_mode,
+                        self.cpu_usage,
+                        self.mem_usage,
+                        time_str,
+                        self.gpu_usage,
+                    );
+                    if self.last_window.as_ref() == Some(&frame) {
+                        continue;
+                    }
+                    let (mode, cpu, mem, time_s, gpu) = &frame;
                     for device in self.devices.values() {
                         if let Err(e) = device.set_small_window_data(
-                            self.config.display_mode,
-                            self.cpu_usage,
-                            self.mem_usage,
-                            &time_str,
-                            self.gpu_usage,
+                            *mode,
+                            *cpu,
+                            *mem,
+                            time_s,
+                            *gpu,
                         ).await {
                             debug!("Failed to send keep-alive to {}: {}", device.get_id(), e);
                         }
                     }
+                    self.last_window = Some(frame);
                 }
 
                 // Forward hardware button events to plugins
@@ -439,6 +459,15 @@ impl UlanziDaemon {
                 warn!("Failed to update small window after mode cycle: {}", e);
             }
         }
+        // Remember what we just sent so the keep-alive doesn't
+        // immediately re-send the identical frame.
+        self.last_window = Some((
+            mode_byte,
+            self.cpu_usage,
+            self.mem_usage,
+            time_str,
+            self.gpu_usage,
+        ));
     }
 }
 
@@ -471,6 +500,7 @@ mod tests {
             debounce_delay: Duration::from_millis(50),
             min_flush_interval: Duration::from_millis(20),
             cycle_rx,
+            last_window: None,
         };
 
         let event = ButtonEvent {
@@ -514,6 +544,7 @@ mod tests {
             debounce_delay: Duration::from_millis(50),
             min_flush_interval: Duration::from_millis(20),
             cycle_rx,
+            last_window: None,
         };
 
         let event = ButtonEvent {
