@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 
 /// Device registration parameters shared between the forwarder and `plugin_ready`.
-pub const DEVICE_NAME: &str = "Ulanzi D200";
+pub const DEVICE_NAME: &str = "Ulanzi D200 Windows";
 pub const DEVICE_ROWS: u8 = 3;
 pub const DEVICE_COLS: u8 = 5;
 

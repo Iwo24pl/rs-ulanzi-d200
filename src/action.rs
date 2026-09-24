@@ -16,7 +16,7 @@ pub struct CycleStatusWindow {
 
 #[async_trait]
 impl Action for CycleStatusWindow {
-    const UUID: ActionUuid = "com.glmagalhaes.ulanzi.d200.cycle";
+    const UUID: ActionUuid = "com.iwo24pl.rs-d200-windows.cycle";
     type Settings = CycleStatusWindowSettings;
 
     async fn key_up(&self, _instance: &Instance, _settings: &Self::Settings) -> OpenActionResult<()> {

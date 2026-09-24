@@ -41,7 +41,7 @@ If you would like to help port the plugin to another platform, feel free to cont
 
 ## Installation
 
-1. Download the latest file from the [releases page](https://gitlab.com/glmagalhaes.mail/rs-ulanzi-d-200-linux/-/releases).
+1. Download the latest file from the [releases page](https://github.com/Iwo24pl/rs-ulanzi-d200-windows/releases).
 2. In OpenDeck, go to **Plugins → Install from file** and select the archive.
 3. The plugin will appear in your plugin list.
 

@@ -1,9 +1,9 @@
 {
-  "Name": "Ulanzi D200",
+  "Name": "Ulanzi D200 Windows",
   "Description": "Device support plugin for the Ulanzi Stream Controller D200 and D200H",
   "Author": "glmagalhaes, mquest, mtesseract",
   "Version": "0.0.1",
-  "PluginUUID": "com.glmagalhaes.ulanzi.d200",
+  "PluginUUID": "com.iwo24pl.rs-d200-windows",
   "CodePathLin": "rs-ulanzi-d200-linux",
   "CodePathWin": "rs-ulanzi-d200-linux.exe",
   "Icon": "assets/icon",
@@ -14,7 +14,7 @@
   ],
   "Actions": [
     {
-      "UUID": "com.glmagalhaes.ulanzi.d200.cycle",
+      "UUID": "com.iwo24pl.rs-d200-windows.cycle",
       "Name": "Screen Switch",
       "Icon": "assets/cycle",
       "Tooltip": "Switch modes of the status screen.",

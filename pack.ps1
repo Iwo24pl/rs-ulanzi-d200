@@ -15,7 +15,7 @@ $BinaryName   = "rs-ulanzi-d200-linux.exe"
 $ManifestSrc  = "src/manifest.json"
 $AssetsSrc    = "src/assets"
 $ConfigYaml   = "config.yaml"
-$PluginFolder = "com.glmagalhaes.ulanzi.d200.sdPlugin"
+$PluginFolder = "com.iwo24pl.rs-d200-windows.sdPlugin"
 
 if ($Mode -eq "debug") {
     $BinaryPath = "target/debug/$BinaryName"
@@ -23,7 +23,7 @@ if ($Mode -eq "debug") {
     cargo build
 } else {
     $BinaryPath = "target/release/$BinaryName"
-    $ZipName    = "com.glmagalhaes.ulanzi.d200.zip"
+    $ZipName    = "com.iwo24pl.rs-d200-windows.zip"
     cargo build --release
 }
 
