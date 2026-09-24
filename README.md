@@ -103,17 +103,5 @@ Update the firmware using **Ulanzi Studio** (available for macOS and Windows) â€
 - Status display frames are sent only when content changes (fixes flicker)
 - GitHub Actions builds for Windows and Linux on every version tag
 
-## Contributing
-
-Contributions are welcome! Please open an issue first to discuss major changes.
-
-## Support the Project
-
-If you find this plugin useful, consider supporting its development with a donation via Pix.
-
-![Pix QR Code](assets/pix-qr-code.png)
-
-**Pix key:** `glmagalhaes@hotmail.com` 
-
 ## License
 This project is licensed under the GNU Affero General Public License v3.0 â€“ see the LICENSE file for details.
