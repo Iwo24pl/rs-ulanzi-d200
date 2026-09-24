@@ -3,7 +3,7 @@
 # OpenDeck Ulanzi D200 Driver (Unofficial)
 
 > **Fork with Windows support.** This is a community fork maintained at
-> [`Iwo24pl/rs-ulanzi-d200-windows`](https://github.com/Iwo24pl/rs-ulanzi-d200-windows),
+> [`Iwo24pl/rs-ulanzi-d200`](https://github.com/Iwo24pl/rs-ulanzi-d200),
 > based on [`glmagalhaes/rs-ulanzi-d200`](https://github.com/glmagalhaes/rs-ulanzi-d200)
 > (upstream source on
 > [GitLab](https://gitlab.com/glmagalhaes.mail/rs-ulanzi-d-200-linux)).
@@ -36,7 +36,7 @@ The D200H is identical to the D200 but includes two additional USB hubs (Genesys
 
 ## Installation
 
-1. Download the Windows or Linux build from the [releases page](https://github.com/Iwo24pl/rs-ulanzi-d200-windows/releases).
+1. Download the Windows or Linux build from the [releases page](https://github.com/Iwo24pl/rs-ulanzi-d200/releases).
 2. In OpenDeck, go to **Plugins → Install from file** and select the archive.
 3. The plugin will appear in your plugin list.
 

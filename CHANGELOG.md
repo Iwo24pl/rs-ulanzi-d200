@@ -1,4 +1,4 @@
-# Fork releases (Iwo24pl/rs-ulanzi-d200-windows)
+# Fork releases (Iwo24pl/rs-ulanzi-d200)
 
 ## 0.0.3
 * Plugin ID `com.iwo24pl.rs-ulanzi-d200`, binary `rs-ulanzi-d200`
