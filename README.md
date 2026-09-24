@@ -1,19 +1,16 @@
 ![OpenDeck Ulanzi D200 Driver Logo](src/assets/icon.png)
 
-# OpenDeck Ulanzi D200 Driver (Unofficial) — Windows Port
+# OpenDeck Ulanzi D200 Driver (Unofficial)
 
-> **Windows-only fork.** This is a community Windows port maintained at
-> [`Iwo24pl/rs-ulanzi-d200-windows`](https://github.com/Iwo24pl/rs-ulanzi-d200-windows).
-> Upstream Linux project:
-> [`glmagalhaes/rs-ulanzi-d200`](https://github.com/glmagalhaes/rs-ulanzi-d200)
-> (official source on
+> **Fork with Windows support.** This is a community fork maintained at
+> [`Iwo24pl/rs-ulanzi-d200-windows`](https://github.com/Iwo24pl/rs-ulanzi-d200-windows),
+> based on [`glmagalhaes/rs-ulanzi-d200`](https://github.com/glmagalhaes/rs-ulanzi-d200)
+> (upstream source on
 > [GitLab](https://gitlab.com/glmagalhaes.mail/rs-ulanzi-d-200-linux)).
-> Please open Windows-port issues on this fork, not upstream.
+> Please open issues on this fork, not upstream.
 
 An unofficial plugin for [OpenDeck](https://github.com/nekename/OpenDeck) that adds support for the Ulanzi D200 and D200H devices.
 
-> **Note**: This project is mirrored on GitHub for visibility, but the official source is on [GitLab](https://gitlab.com/glmagalhaes.mail/rs-ulanzi-d-200-linux). Please open issues there.
->
 > **Recommendation:** For best compatibility, update your device firmware using the official **Ulanzi Studio** (available for macOS and Windows).
 
 ---
@@ -31,21 +28,17 @@ The D200H is identical to the D200 but includes two additional USB hubs (Genesys
 
 | Platform | Status |
 |----------|--------|
-| Windows  | ✅ Supported by this fork (tested on Windows 10/11) |
-| Linux    | ✅ Supported upstream |
-| macOS    | ❌ Planned upstream (see roadmap) |
-
-If you would like to help port the plugin to another platform, feel free to contribute!
+| Windows  | ✅ Supported by this fork |
+| Linux    | ✅ Supported |
+| macOS    | ❌ Not supported |
 
 ---
 
 ## Installation
 
-1. Download the latest file from the [releases page](https://github.com/Iwo24pl/rs-ulanzi-d200-windows/releases).
+1. Download the Windows or Linux build from the [releases page](https://github.com/Iwo24pl/rs-ulanzi-d200-windows/releases).
 2. In OpenDeck, go to **Plugins → Install from file** and select the archive.
 3. The plugin will appear in your plugin list.
-
-> The plugin is also available via the OpenDeck's [OpenAction Marketplace](https://marketplace.tacto.live/plugin/com.glmagalhaes.ulanzi.d200).
 
 ---
 
@@ -67,17 +60,21 @@ This action does **not** affect the button’s ability to send key presses. It o
 
 Requirements: Rust, Cargo, and standard build tools (e.g., `git`, `make`).
 
-The repository includes a `pack.sh` script that compiles the plugin and packages it as a `.zip` file.
+Linux: the `pack.sh` script compiles the plugin and packages it as a `.zip` file.
+Windows: `pack.ps1` is the PowerShell equivalent.
 
 ```sh
-# Debug build (output in target/debug/)
-sh pack.sh
-
-# Release build (optimized, output in target/release/)
+# Release build (optimized)
 sh pack.sh release
 ```
 
-> **Note**: The script assumes a typical Rust environment. If you encounter issues, ensure cargo is in your $PATH.
+```powershell
+# Release build (optimized)
+powershell -ExecutionPolicy Bypass -File ./pack.ps1 release
+```
+
+Every version tag (`v*`) is also built for Windows and Linux by GitHub Actions,
+and both zips are attached to the GitHub release automatically.
 
 ---
 
@@ -99,26 +96,16 @@ Update the firmware using **Ulanzi Studio** (available for macOS and Windows) �
 
 ---
 
-## Road Map
+## Fork differences from upstream
 
-The road map is really short because the plug-in is already working without any problems and all the main features are already done
-
-### v1.0.0
-- [ ] Community testing phase completed
-- [ ] Better icon for the Screen Switch action
-- [x] Saving status window state from previous sessions #14 (Implemented on 0.6.5)
-- [ ] Stability updates
-
-### Future (help wanted)
-- [ ] Support for macOS
-- [ ] Support for Windows
+- Windows support (`CodePathWin`, Win32 HID Report-ID handling, `pack.ps1`)
+- Device re-registration on `plugin_ready` (fixes "no device connected" race)
+- Status display frames are sent only when content changes (fixes flicker)
+- GitHub Actions builds for Windows and Linux on every version tag
 
 ## Contributing
 
-Contributions are welcome! Please:
-
-- Use the [GitLab](https://gitlab.com/glmagalhaes.mail/rs-ulanzi-d-200-linux) repository (the GitHub mirror is read‑only).
-- Open an issue first to discuss major changes.
+Contributions are welcome! Please open an issue first to discuss major changes.
 
 ## Support the Project
 

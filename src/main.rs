@@ -115,7 +115,7 @@ async fn main() -> Result<()> {
         let exe_name = std::env::current_exe()
             .ok()
             .and_then(|p| p.file_name().map(|s| s.to_string_lossy().into_owned()))
-            .unwrap_or_else(|| "rs-ulanzi-d200-linux".to_string());
+            .unwrap_or_else(|| "rs-ulanzi-d200".to_string());
 
         let oa_args = vec![
             exe_name,

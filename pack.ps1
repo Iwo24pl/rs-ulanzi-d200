@@ -11,11 +11,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$BinaryName   = "rs-ulanzi-d200-linux.exe"
+$BinaryName   = "rs-ulanzi-d200.exe"
 $ManifestSrc  = "src/manifest.json"
 $AssetsSrc    = "src/assets"
 $ConfigYaml   = "config.yaml"
-$PluginFolder = "com.iwo24pl.rs-d200-windows.sdPlugin"
+$PluginFolder = "com.iwo24pl.rs-ulanzi-d200.sdPlugin"
 
 if ($Mode -eq "debug") {
     $BinaryPath = "target/debug/$BinaryName"
@@ -23,7 +23,7 @@ if ($Mode -eq "debug") {
     cargo build
 } else {
     $BinaryPath = "target/release/$BinaryName"
-    $ZipName    = "com.iwo24pl.rs-d200-windows.zip"
+    $ZipName    = "com.iwo24pl.rs-ulanzi-d200-windows.zip"
     cargo build --release
 }
 

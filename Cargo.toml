@@ -1,6 +1,6 @@
 [package]
-name = "rs-ulanzi-d200-linux"
-version = "0.0.2"
+name = "rs-ulanzi-d200"
+version = "0.0.3"
 edition = "2024"
 
 [dependencies]

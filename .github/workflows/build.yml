@@ -1,0 +1,53 @@
+name: Build plugin
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install zip
+        run: sudo apt-get update && sudo apt-get install -y zip
+      - name: Build and package
+        run: sh pack.sh release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-zip
+          path: com.iwo24pl.rs-ulanzi-d200-linux.zip
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and package
+        run: powershell -ExecutionPolicy Bypass -File ./pack.ps1 release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: com.iwo24pl.rs-ulanzi-d200-windows.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-zip
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-zip
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            com.iwo24pl.rs-ulanzi-d200-linux.zip
+            com.iwo24pl.rs-ulanzi-d200-windows.zip

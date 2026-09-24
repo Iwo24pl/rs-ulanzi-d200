@@ -1,3 +1,18 @@
+# Fork releases (Iwo24pl/rs-ulanzi-d200-windows)
+
+## 0.0.3
+* Plugin ID `com.iwo24pl.rs-ulanzi-d200`, binary `rs-ulanzi-d200`
+* GitHub Actions builds for Windows and Linux, attached to releases automatically
+
+## 0.0.2
+* Send status-display frames only when content changes (fixes flicker)
+* Renamed to `com.iwo24pl.rs-d200-windows` / `Ulanzi D200 Windows` (superseded by 0.0.3 naming)
+
+## 0.0.1
+* Initial Windows port: Win32 HID Report-ID prefix, `CodePathWin`, `pack.ps1`
+* Re-register device on `plugin_ready` (fixes "no device connected" race)
+* Config resolution relative to executable; Linux-only sysfs gating
+
 # 0.6.5
 * Saving status window state from previous sessions #14
 * Remove remaining code from stand alone daemon

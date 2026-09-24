@@ -12,4 +12,5 @@
 
 ### Debug Files ###
 rs-ulanzi-d200-*.zip
-com.iwo24pl.rs-d200-windows.zip
+# Never commit packaged plugin zips (built per OS by pack scripts / CI)
+*.zip

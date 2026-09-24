@@ -2,11 +2,11 @@
 set -e  # exit on any error
 
 # ---------- Configuration ----------
-BINARY_NAME="rs-ulanzi-d200-linux"
+BINARY_NAME="rs-ulanzi-d200"
 MANIFEST_SRC="src/manifest.json"
 ASSETS_SRC="src/assets"
 CONFIG_YAML="config.yaml"
-PLUGIN_FOLDER="com.iwo24pl.rs-d200-windows.sdPlugin"
+PLUGIN_FOLDER="com.iwo24pl.rs-ulanzi-d200.sdPlugin"
 
 # ---------- Usage ----------
 if [ $# -ne 1 ]; then
@@ -22,7 +22,7 @@ if [ "$MODE" = "debug" ]; then
     ZIP_NAME="rs-ulanzi-d200-debug.zip"
 elif [ "$MODE" = "release" ]; then
     BINARY_PATH="target/release/$BINARY_NAME"
-    ZIP_NAME="com.iwo24pl.rs-d200-windows.zip"
+    ZIP_NAME="com.iwo24pl.rs-ulanzi-d200-linux.zip"
 else
     echo "Invalid mode: $MODE (use 'debug' or 'release')"
     exit 1
