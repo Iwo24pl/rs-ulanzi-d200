@@ -7,7 +7,7 @@
 > based on [`glmagalhaes/rs-ulanzi-d200`](https://github.com/glmagalhaes/rs-ulanzi-d200)
 > (upstream source on
 > [GitLab](https://gitlab.com/glmagalhaes.mail/rs-ulanzi-d-200-linux)).
-> Please open issues on this fork, not upstream.
+> Please open issues related to this fork on this fork, not upstream.
 
 An unofficial plugin for [OpenDeck](https://github.com/nekename/OpenDeck) that adds support for the Ulanzi D200 and D200H devices.
 
@@ -102,6 +102,13 @@ Update the firmware using **Ulanzi Studio** (available for macOS and Windows) â€
 - Device re-registration on `plugin_ready` (fixes "no device connected" race)
 - Status display frames are sent only when content changes (fixes flicker)
 - GitHub Actions builds for Windows and Linux on every version tag
+
+---
+
+## Contributing
+This repo is open to contributions.
+If you have something in mind that you would like to add,
+please fork this repo, implement the fix and open a PR here.
 
 ## License
 This project is licensed under the GNU Affero General Public License v3.0 â€“ see the LICENSE file for details.
