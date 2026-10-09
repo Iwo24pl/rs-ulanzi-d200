@@ -1,9 +1,9 @@
 {
   "Name": "Ulanzi D200",
   "Author": "glmagalhaes, mquest, mtesseract, Iwo24pl",
-  "Version": "0.0.3",
+  "Version": "0.0.4",
   "Icon": "assets/icon",
-  "Category": "Ulanzi D200",
+  "Category": "devices",
   "Actions": [
     {
       "Name": "Screen Switch",
