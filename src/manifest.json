@@ -1,26 +1,29 @@
 {
   "Name": "Ulanzi D200",
-  "Description": "Device support plugin for the Ulanzi Stream Controller D200 and D200H",
   "Author": "glmagalhaes, mquest, mtesseract, Iwo24pl",
   "Version": "0.0.3",
-  "PluginUUID": "com.iwo24pl.rs-ulanzi-d200",
-  "CodePathLin": "rs-ulanzi-d200",
-  "CodePathWin": "rs-ulanzi-d200.exe",
   "Icon": "assets/icon",
   "Category": "Ulanzi D200",
-  "OS": [
-    { "Platform": "linux" },
-    { "Platform": "windows", "MinimumVersion": "10" }
-  ],
   "Actions": [
     {
-      "UUID": "com.iwo24pl.rs-ulanzi-d200.cycle",
       "Name": "Screen Switch",
-      "Icon": "assets/cycle",
+      "UUID": "com.iwo24pl.rs-ulanzi-d200.cycle",
       "Tooltip": "Switch modes of the status screen.",
+      "Icon": "assets/cycle",
       "Controllers": ["Keypad"],
       "States": [{ "Image": "assets/cycle" }]
     }
   ],
+  "OS": [
+    { "Platform": "windows", "Version": "10" },
+    { "Platform": "linux", "Version": null }
+  ],
+  "CodePaths": {
+    "x86_64-pc-windows-msvc": "rs-ulanzi-d200.exe",
+    "x86_64-unknown-linux-gnu": "rs-ulanzi-d200"
+  },
+  "CodePathWin": "rs-ulanzi-d200.exe",
+  "CodePathLin": "rs-ulanzi-d200",
+  "PluginUUID": "com.iwo24pl.rs-ulanzi-d200",
   "DeviceNamespace": "e9"
 }
