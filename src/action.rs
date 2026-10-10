@@ -21,6 +21,7 @@ impl Action for CycleStatusWindow {
 
     async fn key_up(&self, _instance: &Instance, _settings: &Self::Settings) -> OpenActionResult<()> {
         info!("Cycling display mode");
+        crate::tlog!("ACTION cycle key_up received");
         let _ = self.cycle_tx.send(()).await;
         Ok(())
     }

@@ -1,4 +1,4 @@
-use anyhow::Result;
+﻿use anyhow::Result;
 use async_hid::AsyncHidRead;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
@@ -11,7 +11,7 @@ use crate::config::WINDOW_MODE_STATUS;
 use crate::config::WINDOW_MODE_CLOCK;
 use crate::config::WINDOW_MODE_CLEAR;
 use crate::config::Config;
-use crate::device::{ButtonEvent, UlanziDevice};
+use crate::device::{ButtonEvent, UlanziDevice, NUM_BUTTONS};
 use crate::openaction_client::BridgeEvent;
 use crate::system_monitor::SystemMonitor;
 
@@ -44,6 +44,11 @@ pub struct UlanziDaemon {
     // The D200 flickers if it receives redundant frames too fast
     // (upstream 0.6.1), so the keep-alive skips unchanged frames.
     last_window: Option<(u8, u8, u8, String, u8)>,
+    // Last forwarded state per button â€” suppresses duplicate press/release
+    // reports (phantom re-triggers) without affecting genuine taps.
+    pressed_state: [Option<bool>; NUM_BUTTONS],
+    // True when staged button images changed and still need a ZIP upload.
+    images_dirty: bool,
 }
 
 impl UlanziDaemon {
@@ -85,6 +90,8 @@ impl UlanziDaemon {
             min_flush_interval: Duration::from_millis(20),
             cycle_rx,
             last_window: None,
+            pressed_state: [None; NUM_BUTTONS],
+            images_dirty: false,
         })
     }
 
@@ -106,9 +113,10 @@ impl UlanziDaemon {
                 let _ = device.set_label_style(&label_style).await;
             }
 
-            // 3. Start the small‑window data with zeros
+            // 3. Start the small window with the current time
+            let startup_time = chrono::Local::now().format("%H:%M:%S").to_string();
             let _ = device
-                .set_small_window_data(self.config.display_mode, 0, 0, "", 0)
+                .set_small_window_data(self.config.display_mode, 0, 0, &startup_time, 0)
                 .await;
 
             // 4. Notify plugins that a device is connected
@@ -129,9 +137,29 @@ impl UlanziDaemon {
                     loop {
                         match reader.read_input_report(&mut buf).await {
                             Ok(len) if len > 0 => {
-                                if let Some(event) = UlanziDevice::parse_report(&buf[..len]) {
-                                    if tx.send((device_id.clone(), event)).await.is_err() {
-                                        break;
+                                let hex: String = buf[..len.min(24)]
+                                    .iter()
+                                    .map(|b| format!("{:02x} ", b))
+                                    .collect();
+                                match UlanziDevice::parse_report(&buf[..len]) {
+                                    Some(event) => {
+                                        crate::tlog!(
+                                            "RAW {} {}| idx={} pressed={}",
+                                            device_id,
+                                            hex.trim_end(),
+                                            event.index,
+                                            event.pressed
+                                        );
+                                        if tx.send((device_id.clone(), event)).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                    None => {
+                                        crate::tlog!(
+                                            "RAW {} {}| (unhandled)",
+                                            device_id,
+                                            hex.trim_end()
+                                        );
                                     }
                                 }
                             }
@@ -232,9 +260,9 @@ impl UlanziDaemon {
                     self.perform_flush().await;
                 }
 
-                // Keep‑alive: update small window with current stats.
+                // Keepâ€‘alive: update small window with current stats.
                 // Send only when the frame actually changed (the clock ticks
-                // ~1/s, stats ~1/s) — redundant 10/s writes make the
+                // ~1/s, stats ~1/s) â€” redundant 10/s writes make the
                 // firmware display flicker.
                 _ = keep_alive_interval.tick() => {
                     use chrono::Local;
@@ -308,12 +336,22 @@ impl UlanziDaemon {
     async fn perform_flush(&mut self) {
         self.flush_deadline = None;
 
+        // Skip the upload entirely when no image actually changed: a full
+        // ZIP re-send makes the firmware reload every icon and repaint the
+        // display, which briefly shows the *previous* small-window content
+        // (the "two apps are fighting for the screen" flash).
+        if !self.images_dirty {
+            crate::tlog!("FLUSH skipped (no image changed)");
+            return;
+        }
+        crate::tlog!("FLUSH begin");
+
         // Wrap the flush operation in a timeout.
         let flush_future = async {
             for device in self.devices.values() {
                 if let Err(e) = device.flush().await {
                     info!("Failed to flush device {}: {}", device.get_id(), e);
-                    // Continue with other devices (if any) – don't break.
+                    // Continue with other devices (if any) â€“ don't break.
                 }
             }
             self.last_flush_time = Some(Instant::now());
@@ -325,15 +363,38 @@ impl UlanziDaemon {
                 // Flush finished within timeout (success or logged error).
             }
             Err(_) => {
-                info!("Flush timed out after 2 seconds – device may be stuck");
+                info!("Flush timed out after 2 seconds â€“ device may be stuck");
                 // Still update last_flush_time to avoid immediate retry storms.
                 self.last_flush_time = Some(Instant::now());
             }
         }
+        self.images_dirty = false;
+        // The repaint can clobber the small window â€” force the keep-alive
+        // to re-send the current frame within 100 ms.
+        self.last_window = None;
+        crate::tlog!("FLUSH done");
     }
 
     async fn handle_device_event(&mut self, device_id: &str, event: ButtonEvent) {
         debug!("Button event from {}: {:?}", device_id, event);
+        // State dedup: the same edge twice in a row is a duplicate report
+        // (real presses always alternate press/release).
+        if self.pressed_state[event.index] == Some(event.pressed) {
+            crate::tlog!(
+                "DEDUP {} idx={} (already {})",
+                device_id,
+                event.index,
+                if event.pressed { "pressed" } else { "released" }
+            );
+            return;
+        }
+        self.pressed_state[event.index] = Some(event.pressed);
+        crate::tlog!(
+            "HW {} idx={} {}",
+            device_id,
+            event.index,
+            if event.pressed { "DOWN" } else { "UP" }
+        );
         if let Some(ref tx) = self.hw_event_tx {
             let outbound = if event.pressed {
                 HardwareEvent::KeyDown {
@@ -369,6 +430,13 @@ impl UlanziDaemon {
                     debug!("Setting image for button {} on {}", index, dev.get_id());
                     match dev.set_button_image(index, &image_base64).await {
                         Ok(true) => {
+                            self.images_dirty = true;
+                            crate::tlog!(
+                                "CMD SetImage device={} position={} len={} (staged)",
+                                dev.get_id(),
+                                index,
+                                image_base64.len()
+                            );
                             debug!(
                                 "SetImage: device={} position={} image_len={} (staged)",
                                 dev.get_id(),
@@ -377,6 +445,10 @@ impl UlanziDaemon {
                             );
                         }
                         Ok(false) => {
+                            crate::tlog!(
+                                "CMD SetImage position={} (unchanged, no flush)",
+                                index
+                            );
                             debug!("Image unchanged for button {}, skipping", index);
                         }
                         Err(e) => error!("Failed to set image: {}", e),
@@ -396,6 +468,12 @@ impl UlanziDaemon {
                 };
                 if let Some(dev) = dev {
                     let index = position as usize;
+                    self.images_dirty = true;
+                    crate::tlog!(
+                        "CMD ClearImage device={} position={}",
+                        dev.get_id(),
+                        index
+                    );
                     debug!(
                         "ClearImage: device={} position={} (staged)",
                         dev.get_id(),
@@ -416,6 +494,7 @@ impl UlanziDaemon {
                     self.devices.values_mut().next()
                 };
                 if let Some(dev) = dev {
+                    crate::tlog!("CMD SetBrightness={}", brightness);
                     if let Err(e) = dev.set_brightness(brightness).await {
                         error!("Failed to set brightness: {}", e);
                     }
@@ -439,35 +518,57 @@ impl UlanziDaemon {
         if let Err(e) = self.config.save() {
             warn!("Failed to save config: {}", e);
         }
-        info!("Small‑window mode cycled: {:?} -> {:?}", current, new_mode);
+        info!("Smallâ€‘window mode cycled: {:?} -> {:?}", current, new_mode);
+        crate::tlog!("CYCLE mode {} -> {}", current, new_mode);
 
         // Convert to u8 for device command
         let mode_byte = new_mode as u8;
         let now = chrono::Local::now();
         let time_str = now.format("%H:%M:%S").to_string();
+        let frame = (
+            mode_byte,
+            self.cpu_usage,
+            self.mem_usage,
+            time_str,
+            self.gpu_usage,
+        );
         for device in self.devices.values() {
             if let Err(e) = device
                 .set_small_window_data(
-                    mode_byte,
-                    self.cpu_usage,
-                    self.mem_usage,
-                    &time_str,
-                    self.gpu_usage,
+                    frame.0,
+                    frame.1,
+                    frame.2,
+                    &frame.3,
+                    frame.4,
                 )
                 .await
             {
                 warn!("Failed to update small window after mode cycle: {}", e);
             }
         }
+        // The firmware renders the small window one frame behind the last
+        // received payload: a single mode-change frame still paints the
+        // *previous* display until the next frame arrives (up to 1 s later
+        // via keep-alive), which reads as a flash. Send the frame once more
+        // after a short delay so the switch is applied within ~60 ms.
+        tokio::time::sleep(Duration::from_millis(60)).await;
+        for device in self.devices.values() {
+            if let Err(e) = device
+                .set_small_window_data(
+                    frame.0,
+                    frame.1,
+                    frame.2,
+                    &frame.3,
+                    frame.4,
+                )
+                .await
+            {
+                warn!("Failed to re-send small window frame: {}", e);
+            }
+        }
         // Remember what we just sent so the keep-alive doesn't
         // immediately re-send the identical frame.
-        self.last_window = Some((
-            mode_byte,
-            self.cpu_usage,
-            self.mem_usage,
-            time_str,
-            self.gpu_usage,
-        ));
+        self.last_window = Some(frame);
     }
 }
 
@@ -501,6 +602,8 @@ mod tests {
             min_flush_interval: Duration::from_millis(20),
             cycle_rx,
             last_window: None,
+            pressed_state: [None; NUM_BUTTONS],
+            images_dirty: false,
         };
 
         let event = ButtonEvent {
@@ -545,6 +648,8 @@ mod tests {
             min_flush_interval: Duration::from_millis(20),
             cycle_rx,
             last_window: None,
+            pressed_state: [None; NUM_BUTTONS],
+            images_dirty: false,
         };
 
         let event = ButtonEvent {

@@ -236,7 +236,13 @@ impl UlanziDevice {
         time_str: &str,
         gpu: u8,
     ) -> Result<()> {
-        let payload = format!("{}|{}|{}|{}|{}", mode, cpu, mem, time_str, gpu).into_bytes();
+        // Official Ulanzi payload is 7 fields:
+        // mode|cpu|mem|time|gpu|24H|suffix.  The trailing "|24H|" format
+        // marker is required for the firmware to lay out the time correctly
+        // (without it the time renders slightly too high on the wide tile).
+        let payload =
+            format!("{}|{}|{}|{}|{}|24H|", mode, cpu, mem, time_str, gpu).into_bytes();
+        crate::tlog!("TX-SW {}", String::from_utf8_lossy(&payload));
         self.send_command(CommandProtocol::OutSetSmallWindowData, &payload)
             .await
     }

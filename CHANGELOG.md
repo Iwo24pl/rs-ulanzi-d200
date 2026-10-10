@@ -1,5 +1,17 @@
 # Fork releases (Iwo24pl/rs-ulanzi-d200)
 
+## 0.1.0
+* Official 7-field small-window payload (`mode|cpu|mem|time|gpu|24H|`) — fixes the clock text rendering too high on the wide screen
+* Skip the icon ZIP upload when no image changed — no full display redraw on every button press (device is much smoother now)
+* Re-send the mode-change frame immediately after cycling — shortens the flash of the previous display when switching modes
+* Suppress duplicate button press/release HID reports (phantom re-triggers)
+* Always-on diagnostic trace: `%TEMP%\rs-ulanzi-d200-trace.log` (every raw report, forwarded key, action and outgoing frame)
+* Startup small-window frame now carries the real time instead of empty data
+* New `hidcap` (raw HID capture) and `swprobe` (small-window payload probe) examples
+
+## 0.0.4
+* OpenAction manifest spec alignment: `Version` key (replaces `MinimumVersion`), `CodePaths` platform triples, `Category`
+
 ## 0.0.3
 * Plugin ID `com.iwo24pl.rs-ulanzi-d200`, binary `rs-ulanzi-d200`
 * GitHub Actions builds for Windows and Linux, attached to releases automatically

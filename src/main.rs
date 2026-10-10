@@ -4,6 +4,12 @@ mod device;
 mod openaction_client;
 mod system_monitor;
 mod action;
+mod trace;
+
+macro_rules! tlog {
+    ($($arg:tt)*) => { $crate::trace::logf(format_args!($($arg)*)) };
+}
+pub(crate) use tlog;
 
 use anyhow::Result;
 use clap::Parser;
@@ -63,6 +69,9 @@ async fn main() -> Result<()> {
 
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(&args.log_level))
         .init();
+
+    trace::init();
+    tlog!("=== rs-ulanzi-d200 {} started ===", env!("CARGO_PKG_VERSION"));
 
     info!("Starting Ulanzi D200 Rust Driver (MQ-RUST-002)");
 
@@ -153,9 +162,11 @@ async fn main() -> Result<()> {
                         device_id,
                         key_index,
                     } => {
+                        tlog!("OA key_down device={} key={}", device_id, key_index);
                         if let Err(e) =
                             openaction::device_plugin::key_down(device_id.clone(), key_index).await
                         {
+                            tlog!("OA key_down FAILED {}: {}", device_id, e);
                             warn!("key_down forward failed for {}: {}", device_id, e);
                         }
                     }
@@ -163,9 +174,11 @@ async fn main() -> Result<()> {
                         device_id,
                         key_index,
                     } => {
+                        tlog!("OA key_up device={} key={}", device_id, key_index);
                         if let Err(e) =
                             openaction::device_plugin::key_up(device_id.clone(), key_index).await
                         {
+                            tlog!("OA key_up FAILED {}: {}", device_id, e);
                             warn!("key_up forward failed for {}: {}", device_id, e);
                         }
                     }
