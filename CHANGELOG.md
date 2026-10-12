@@ -1,5 +1,9 @@
 # Fork releases (Iwo24pl/rs-ulanzi-d200)
 
+## 0.1.1
+* Single merged release package: Windows (`.exe`) and Linux (binary) builds shipped in one zip, selected per platform via the manifest `CodePaths`
+* Flush timeout raised 2s → 15s and pending images are retried instead of dropped — fixes blank button grid after startup and page switches that only appeared after a key press on slower (Linux hidraw) links
+
 ## 0.1.0
 * Official 7-field small-window payload (`mode|cpu|mem|time|gpu|24H|`) — fixes the clock text rendering too high on the wide screen
 * Skip the icon ZIP upload when no image changed — no full display redraw on every button press (device is much smoother now)

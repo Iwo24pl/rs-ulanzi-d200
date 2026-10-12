@@ -1,4 +1,4 @@
-﻿use anyhow::Result;
+use anyhow::Result;
 use async_hid::AsyncHidRead;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
@@ -44,7 +44,7 @@ pub struct UlanziDaemon {
     // The D200 flickers if it receives redundant frames too fast
     // (upstream 0.6.1), so the keep-alive skips unchanged frames.
     last_window: Option<(u8, u8, u8, String, u8)>,
-    // Last forwarded state per button â€” suppresses duplicate press/release
+    // Last forwarded state per button — suppresses duplicate press/release
     // reports (phantom re-triggers) without affecting genuine taps.
     pressed_state: [Option<bool>; NUM_BUTTONS],
     // True when staged button images changed and still need a ZIP upload.
@@ -260,9 +260,9 @@ impl UlanziDaemon {
                     self.perform_flush().await;
                 }
 
-                // Keepâ€‘alive: update small window with current stats.
+                // Keep‑alive: update small window with current stats.
                 // Send only when the frame actually changed (the clock ticks
-                // ~1/s, stats ~1/s) â€” redundant 10/s writes make the
+                // ~1/s, stats ~1/s) — redundant 10/s writes make the
                 // firmware display flicker.
                 _ = keep_alive_interval.tick() => {
                     use chrono::Local;
@@ -344,35 +344,55 @@ impl UlanziDaemon {
             crate::tlog!("FLUSH skipped (no image changed)");
             return;
         }
+
+        let started = Instant::now();
         crate::tlog!("FLUSH begin");
 
-        // Wrap the flush operation in a timeout.
+        // The icon ZIP is hundreds of 1024-byte HID writes. Linux hidraw
+        // links are much slower than Windows, so the previous 2s limit
+        // aborted transfers mid-stream (blank deck after start, page
+        // switches that only appeared after a key press). Allow 15s and
+        // retry on failure instead of dropping the pending images.
         let flush_future = async {
+            let mut all_ok = true;
             for device in self.devices.values() {
                 if let Err(e) = device.flush().await {
                     info!("Failed to flush device {}: {}", device.get_id(), e);
-                    // Continue with other devices (if any) â€“ don't break.
+                    // Continue with other devices (if any) – don't break.
+                    all_ok = false;
                 }
             }
-            self.last_flush_time = Some(Instant::now());
-            debug!("Flush completed (or attempted)");
+            all_ok
         };
 
-        match tokio::time::timeout(Duration::from_secs(2), flush_future).await {
-            Ok(_) => {
-                // Flush finished within timeout (success or logged error).
+        let success = match tokio::time::timeout(Duration::from_secs(15), flush_future).await {
+            Ok(true) => true,
+            Ok(false) => {
+                info!("Flush failed – keeping images dirty for retry");
+                false
             }
             Err(_) => {
-                info!("Flush timed out after 2 seconds â€“ device may be stuck");
-                // Still update last_flush_time to avoid immediate retry storms.
-                self.last_flush_time = Some(Instant::now());
+                info!("Flush timed out after 15 seconds – device may be stuck; will retry");
+                false
             }
+        };
+
+        self.last_flush_time = Some(Instant::now());
+        if success {
+            self.images_dirty = false;
+            // The repaint can clobber the small window — force the keep-alive
+            // to re-send the current frame within 100 ms.
+            self.last_window = None;
+            crate::tlog!("FLUSH done in {} ms", started.elapsed().as_millis());
+        } else {
+            // Keep images_dirty set and try again shortly; a partial ZIP
+            // is ignored by the firmware (sentinel comes last).
+            self.flush_deadline = Some(Instant::now() + Duration::from_millis(500));
+            crate::tlog!(
+                "FLUSH failed after {} ms -> retry in 500 ms",
+                started.elapsed().as_millis()
+            );
         }
-        self.images_dirty = false;
-        // The repaint can clobber the small window â€” force the keep-alive
-        // to re-send the current frame within 100 ms.
-        self.last_window = None;
-        crate::tlog!("FLUSH done");
     }
 
     async fn handle_device_event(&mut self, device_id: &str, event: ButtonEvent) {
@@ -518,7 +538,7 @@ impl UlanziDaemon {
         if let Err(e) = self.config.save() {
             warn!("Failed to save config: {}", e);
         }
-        info!("Smallâ€‘window mode cycled: {:?} -> {:?}", current, new_mode);
+        info!("Small‑window mode cycled: {:?} -> {:?}", current, new_mode);
         crate::tlog!("CYCLE mode {} -> {}", current, new_mode);
 
         // Convert to u8 for device command
