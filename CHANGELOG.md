@@ -1,8 +1,9 @@
 # Fork releases (Iwo24pl/rs-ulanzi-d200)
 
-## 0.1.1
+## 0.1.2
 * Single merged release package: Windows (`.exe`) and Linux (binary) builds shipped in one zip, selected per platform via the manifest `CodePaths`
 * Flush timeout raised 2s → 15s and pending images are retried instead of dropped — fixes blank button grid after startup and page switches that only appeared after a key press on slower (Linux hidraw) links
+* Fixed "half page" icons on page changes: raised `min_flush_interval` 20ms → 500ms so the device has time to fully apply one icon ZIP before the next flush begins. OpenDeck bursts `SetImage` commands faster than the D200 firmware can write icons to flash; flushes arriving while a previous transfer was still being applied caused mixed old/new icon state. Pressing a button worked because it triggered a fresh re-send when the device was idle.
 
 ## 0.1.0
 * Official 7-field small-window payload (`mode|cpu|mem|time|gpu|24H|`) — fixes the clock text rendering too high on the wide screen

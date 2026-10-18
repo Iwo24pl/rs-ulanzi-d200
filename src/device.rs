@@ -474,7 +474,7 @@ impl UlanziDevice {
                 MAX_COMMAND_PAYLOAD
             ));
         }
-        let packet = self.build_packet(command, payload, payload.len() as u32);
+        let packet = Self::build_packet(command, payload, payload.len() as u32);
         let report = Self::output_report(&packet);
         self.writer.lock().await.write_output_report(&report).await?;
         Ok(())
@@ -483,14 +483,14 @@ impl UlanziDevice {
     async fn send_file(&self, data: &[u8]) -> Result<()> {
         let file_size = data.len() as u32;
         debug!("Sending icon data! ({} bytes)", file_size);
+
         let first_chunk = if data.len() >= 1016 {
             &data[..1016]
         } else {
             data
         };
         let first_packet =
-            self.build_packet(CommandProtocol::OutSetButtons, first_chunk, file_size);
-
+            Self::build_packet(CommandProtocol::OutSetButtons, first_chunk, file_size);
         let mut writer = self.writer.lock().await;
         writer
             .write_output_report(&Self::output_report(&first_packet))
@@ -509,7 +509,7 @@ impl UlanziDevice {
         Ok(())
     }
 
-    fn build_packet(&self, command: CommandProtocol, data: &[u8], total_length: u32) -> Vec<u8> {
+    fn build_packet(command: CommandProtocol, data: &[u8], total_length: u32) -> Vec<u8> {
         let mut packet = Vec::with_capacity(PACKET_SIZE);
         packet.extend_from_slice(&HEADER);
 
@@ -550,5 +550,35 @@ mod tests {
     fn test_generate_id_without_serial() {
         let id = UlanziDevice::generate_id(None, "fallback");
         assert_eq!(id, "e9-fallback");
+    }
+
+    /// `build_packet` frames the first packet of a multi-packet file
+    /// transfer (header + command + total length + payload). Continuation
+    /// packets are sent as raw unframed chunks — the firmware reassembles the
+    /// ZIP from the total_length advertised in the first packet. Framing
+    /// continuation packets corrupts the ZIP stream ("half page" icons).
+    #[test]
+    fn test_build_packet_frames_first_packet() {
+        let payload: Vec<u8> = (0..3000).map(|i| (i % 251) as u8).collect();
+        let total_length = payload.len() as u32;
+
+        let payload: Vec<u8> = (0..3000).map(|i| (i % 251) as u8).collect();
+        let total_length = payload.len() as u32;
+
+        // First packet: framed, 1016 bytes of payload
+        let first_chunk = &payload[..1016];
+        let first_packet = UlanziDevice::build_packet(CommandProtocol::OutSetButtons, first_chunk, total_length);
+        assert_eq!(first_packet.len(), PACKET_SIZE);
+        assert_eq!(&first_packet[0..2], &HEADER);
+        assert_eq!(u16::from_be_bytes([first_packet[2], first_packet[3]]), CommandProtocol::OutSetButtons as u16);
+        assert_eq!(u32::from_le_bytes([first_packet[4], first_packet[5], first_packet[6], first_packet[7]]), total_length);
+        assert_eq!(&first_packet[8..8 + first_chunk.len()], first_chunk);
+
+        // Continuation packet (raw): payload bytes only, no header
+        let continuation = &payload[1016..2040];
+        let mut raw = [0u8; PACKET_SIZE];
+        raw[..continuation.len()].copy_from_slice(continuation);
+        assert_eq!(&raw[..continuation.len()], continuation);
+        assert_eq!(raw[0], payload[1016]); // not 0x7c header byte
     }
 }

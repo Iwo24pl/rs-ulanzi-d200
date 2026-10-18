@@ -87,7 +87,7 @@ impl UlanziDaemon {
             flush_deadline: None,
             last_flush_time: None,
             debounce_delay: Duration::from_millis(50),
-            min_flush_interval: Duration::from_millis(20),
+            min_flush_interval: Duration::from_millis(500),
             cycle_rx,
             last_window: None,
             pressed_state: [None; NUM_BUTTONS],
