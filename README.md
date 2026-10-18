@@ -1,4 +1,4 @@
-![OpenDeck Ulanzi D200 Driver Logo](src/assets/icon.png)
+![OpenDeck Ulanzi D200 Driver Logo](src/assets/com.iwo24pl.rs-ulanzi-d200.icon.png)
 
 # OpenDeck Ulanzi D200 Driver (Unofficial)
 
