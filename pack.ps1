@@ -47,11 +47,26 @@ try {
     Copy-Item -LiteralPath $ConfigYaml  -Destination (Join-Path $Dest "config.yaml")
     Copy-Item -LiteralPath $AssetsSrc   -Destination (Join-Path $Dest "assets") -Recurse
 
-    if (Test-Path -LiteralPath $ZipName) { Remove-Item -LiteralPath $ZipName -Force }
-    Compress-Archive -Path (Join-Path $TmpDir $PluginFolder) -DestinationPath (Join-Path (Get-Location) $ZipName)
+    if (-not (Test-Path -LiteralPath $ZipName)) { Remove-Item -LiteralPath $ZipName -Force -ErrorAction SilentlyContinue }
 
-    Write-Output "Successfully created $ZipName"
-    Write-Output "Zip contains the top-level folder: $PluginFolder/"
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+$fs = [IO.File]::Open((Join-Path (Get-Location) $ZipName), [IO.FileMode]::CreateNew)
+$zip = New-Object IO.Compression.ZipArchive($fs, [IO.Compression.ZipArchiveMode]::Create)
+Get-ChildItem (Join-Path $TmpDir $PluginFolder) -Recurse -File | ForEach-Object {
+    $rel = $_.FullName.Substring((Join-Path $TmpDir $PluginFolder).Length + 1).Replace('\', '/')
+    $entry = $zip.CreateEntry("$PluginFolder/$rel", [IO.Compression.CompressionLevel]::Optimal)
+    $es = $entry.Open()
+    $bytes = [IO.File]::ReadAllBytes($_.FullName)
+    $es.Write($bytes, 0, $bytes.Length)
+    $es.Close()
+}
+$zip.Dispose()
+$fs.Close()
+
+Write-Output "Successfully created $ZipName"
+Write-Output "Zip contains the top-level folder: $PluginFolder/"
 }
 finally {
     Remove-Item -LiteralPath $TmpDir -Recurse -Force -ErrorAction SilentlyContinue
