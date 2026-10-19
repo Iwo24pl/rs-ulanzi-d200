@@ -53,7 +53,7 @@ jobs:
           unzip -q com.iwo24pl.rs-ulanzi-d200-linux.zip -d merged
           unzip -q -o com.iwo24pl.rs-ulanzi-d200-windows.zip -d merged
           ls -l merged/com.iwo24pl.rs-ulanzi-d200.sdPlugin
-          zip -qr com.iwo24pl.rs-ulanzi-d200.zip merged/com.iwo24pl.rs-ulanzi-d200.sdPlugin
+          (cd merged && zip -qr ../com.iwo24pl.rs-ulanzi-d200.zip com.iwo24pl.rs-ulanzi-d200.sdPlugin)
       - uses: softprops/action-gh-release@v2
         with:
           files: com.iwo24pl.rs-ulanzi-d200.zip
