@@ -1,5 +1,17 @@
 # Fork releases (Iwo24pl/rs-ulanzi-d200)
 
+## 0.2.0
+* Icon updates now use the device's native incremental protocol: the full layout is sent once per connect (`0x0001`), then only the buttons that changed are pushed (`0x000d`). A page switch no longer re-uploads all 14 icons, and the flush throttle dropped from 500 ms to 150 ms.
+* Removed the random padding, `sentinel.txt`, shuffled order and 1000-retry byte-offset workaround. The device accepts the clean configuration ZIP used by the official app (`Images/` + `manifest.json`).
+* Icon decoding/resizing/PNG encoding and ZIP building now run off the async runtime, so the clock and key presses stay responsive during uploads.
+* The wide button now writes the same icon to both of its grid cells (`3_2` and `4_2`), matching the official app; OpenDeck's 15th grid cell no longer logs an error on every page change.
+* Changes are tracked per device and per button: an unchanged image, a clear of an already-empty cell or a command for an unknown device no longer triggers a redraw.
+* Crash fix: `stats_interval_ms: 0` no longer panics at startup. Config values are validated/clamped on load (stats interval 100 ms–60 s, brightness ≤ 100, display mode 0–2), and a config that failed to load can now be saved again.
+* Device IDs no longer contain `Debug`-formatted platform paths (quotes/backslashes) when the serial number is unavailable; such paths are hashed instead.
+* Fixed `pack.ps1` failing on a second run, the `-info` fallback (`{}` could never deserialize), and stale README release instructions.
+* CI now runs `cargo fmt --check`, `cargo clippy -D warnings` and `cargo test` before building a release.
+* Dropped unused direct dependencies (`rand`, `byteorder`, `url`, `tokio-tungstenite`).
+
 ## 0.1.2
 * Single merged release package: Windows (`.exe`) and Linux (binary) builds shipped in one zip, selected per platform via the manifest `CodePaths`
 * Flush timeout raised 2s → 15s and pending images are retried instead of dropped — fixes blank button grid after startup and page switches that only appeared after a key press on slower (Linux hidraw) links

@@ -1,8 +1,8 @@
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 #[cfg(target_os = "linux")]
 use std::fs;
 #[cfg(target_os = "linux")]
 use std::path::Path;
+use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 
 #[cfg(feature = "nvidia")]
 use nvml_wrapper::Nvml;
@@ -58,14 +58,14 @@ impl SystemMonitor {
     fn get_gpu_load(&self) -> u8 {
         // 1) Try NVIDIA GPUs through NVML (cross-platform: nvml.dll on Windows)
         #[cfg(feature = "nvidia")]
-        if let Some(nv) = &self.nvml {
-            if let Ok(device_count) = nv.device_count() {
-                for i in 0..device_count {
-                    if let Ok(device) = nv.device_by_index(i) {
-                        if let Ok(util) = device.utilization_rates() {
-                            return util.gpu as u8;
-                        }
-                    }
+        if let Some(nv) = &self.nvml
+            && let Ok(device_count) = nv.device_count()
+        {
+            for i in 0..device_count {
+                if let Ok(device) = nv.device_by_index(i)
+                    && let Ok(util) = device.utilization_rates()
+                {
+                    return util.gpu as u8;
                 }
             }
         }
@@ -78,18 +78,20 @@ impl SystemMonitor {
                 for entry in entries.flatten() {
                     let name = entry.file_name().to_string_lossy().to_string();
                     // Only consider top‑level `cardN` entries
-                    if name.starts_with("card") && name.chars().skip(4).all(|c| c.is_ascii_digit()) {
+                    if name.starts_with("card") && name.chars().skip(4).all(|c| c.is_ascii_digit())
+                    {
                         // Detect vendor via PCI vendor ID
                         let vendor_path = format!("/sys/class/drm/{}/device/vendor", name);
                         if let Ok(vendor) = fs::read_to_string(&vendor_path) {
                             let vendor = vendor.trim();
                             // AMD or Intel → try gpu_busy_percent
                             if vendor == "0x1002" || vendor == "0x8086" {
-                                let busy_path = format!("/sys/class/drm/{}/device/gpu_busy_percent", name);
-                                if let Ok(content) = fs::read_to_string(&busy_path) {
-                                    if let Ok(load) = content.trim().parse::<f32>() {
-                                        return load as u8;
-                                    }
+                                let busy_path =
+                                    format!("/sys/class/drm/{}/device/gpu_busy_percent", name);
+                                if let Ok(content) = fs::read_to_string(&busy_path)
+                                    && let Ok(load) = content.trim().parse::<f32>()
+                                {
+                                    return load as u8;
                                 }
                             }
                         }

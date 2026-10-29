@@ -33,9 +33,7 @@ async fn main() -> anyhow::Result<()> {
     let info = devices
         .into_iter()
         .find(|d| {
-            d.vendor_id == VENDOR_ID
-                && d.product_id == PRODUCT_ID
-                && d.usage_page == USAGE_PAGE
+            d.vendor_id == VENDOR_ID && d.product_id == PRODUCT_ID && d.usage_page == USAGE_PAGE
         })
         .ok_or_else(|| anyhow::anyhow!("D200 not found"))?;
     let (_reader, mut writer) = info.open().await?;
@@ -66,7 +64,11 @@ async fn main() -> anyhow::Result<()> {
 
     let log_path = std::env::temp_dir().join("swprobe.log");
     let mut logf = std::fs::File::create(&log_path)?;
-    writeln!(logf, "== swprobe: {}s per variant -> {:?}", seconds_each, log_path)?;
+    writeln!(
+        logf,
+        "== swprobe: {}s per variant -> {:?}",
+        seconds_each, log_path
+    )?;
 
     for (label, payload) in &variants {
         let line = format!("SEND [{}] payload={}", label, payload);

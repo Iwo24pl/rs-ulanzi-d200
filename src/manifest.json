@@ -1,7 +1,7 @@
 {
   "Name": "Ulanzi D200",
   "Author": "glmagalhaes, mquest, mtesseract, Iwo24pl",
-  "Version": "0.1.2",
+  "Version": "0.2.0",
   "Icon": "assets/com.iwo24pl.rs-ulanzi-d200.icon",
   "Category": "Device",
   "Actions": [

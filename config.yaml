@@ -1,3 +1,2 @@
 brightness: 100
-display_mode: 0 #INDOW_MODE_STATUS: u8 = 0
-
+display_mode: 0 # 0 = status, 1 = clock, 2 = clear

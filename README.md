@@ -36,7 +36,7 @@ The D200H is identical to the D200 but includes two additional USB hubs (Genesys
 
 ## Installation
 
-1. Download the Windows or Linux build from the [releases page](https://github.com/Iwo24pl/rs-ulanzi-d200/releases).
+1. Download the latest release zip from the [releases page](https://github.com/Iwo24pl/rs-ulanzi-d200/releases). One archive contains both the Windows and Linux binaries; OpenDeck picks the right one via `CodePaths`.
 2. In OpenDeck, go to **Plugins â†’ Install from file** and select the archive.
 3. The plugin will appear in your plugin list.
 
@@ -73,8 +73,8 @@ sh pack.sh release
 powershell -ExecutionPolicy Bypass -File ./pack.ps1 release
 ```
 
-Every version tag (`v*`) is also built for Windows and Linux by GitHub Actions,
-and both zips are attached to the GitHub release automatically.
+Every version tag (`v*`) is also built for Windows and Linux by GitHub Actions
+and published as a single `.zip` attached to the GitHub release automatically.
 
 ---
 
@@ -101,7 +101,8 @@ Update the firmware using **Ulanzi Studio** (available for macOS and Windows) â€
 - Windows support (`CodePathWin`, Win32 HID Report-ID handling, `pack.ps1`)
 - Device re-registration on `plugin_ready` (fixes "no device connected" race)
 - Status display frames are sent only when content changes (fixes flicker)
-- GitHub Actions builds for Windows and Linux on every version tag
+- Native incremental icon protocol (`0x000d`): only changed buttons are uploaded, not the whole grid
+- GitHub Actions builds for Windows and Linux on every version tag, published as one merged zip
 
 ---
 

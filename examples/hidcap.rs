@@ -26,7 +26,11 @@ async fn main() -> anyhow::Result<()> {
 
     log_line(
         &mut file,
-        &format!("== hidcap: capturing {}s -> {}", seconds, log_path.display()),
+        &format!(
+            "== hidcap: capturing {}s -> {}",
+            seconds,
+            log_path.display()
+        ),
     );
 
     let backend = HidBackend::default();
@@ -44,9 +48,7 @@ async fn main() -> anyhow::Result<()> {
     let info = devices
         .into_iter()
         .find(|d| {
-            d.vendor_id == VENDOR_ID
-                && d.product_id == PRODUCT_ID
-                && d.usage_page == USAGE_PAGE
+            d.vendor_id == VENDOR_ID && d.product_id == PRODUCT_ID && d.usage_page == USAGE_PAGE
         })
         .ok_or_else(|| anyhow::anyhow!("D200 not found"))?;
 
@@ -98,10 +100,15 @@ async fn main() -> anyhow::Result<()> {
                 };
                 log_line(
                     &mut file,
-                    &format!("[{:>8.3}s] len={} {} | {}", start.elapsed().as_secs_f64(), len, hex, parsed),
+                    &format!(
+                        "[{:>8.3}s] len={} {} | {}",
+                        start.elapsed().as_secs_f64(),
+                        len,
+                        hex,
+                        parsed
+                    ),
                 );
             }
-            Ok(Ok(_)) => continue,
             Ok(Err(e)) => {
                 log_line(&mut file, &format!("read error: {}", e));
                 break;

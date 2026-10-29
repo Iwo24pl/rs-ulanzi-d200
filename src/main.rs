@@ -1,9 +1,9 @@
+mod action;
 mod config;
 mod daemon;
 mod device;
 mod openaction_client;
 mod system_monitor;
-mod action;
 mod trace;
 
 macro_rules! tlog {
@@ -14,8 +14,8 @@ pub(crate) use tlog;
 use anyhow::Result;
 use clap::Parser;
 use log::{error, info, warn};
-use std::path::PathBuf;
 use openaction::*;
+use std::path::PathBuf;
 use tokio::sync::mpsc;
 
 #[derive(Parser, Debug)]
@@ -71,7 +71,10 @@ async fn main() -> Result<()> {
         .init();
 
     trace::init();
-    tlog!("=== rs-ulanzi-d200 {} started ===", env!("CARGO_PKG_VERSION"));
+    tlog!(
+        "=== rs-ulanzi-d200 {} started ===",
+        env!("CARGO_PKG_VERSION")
+    );
 
     info!("Starting Ulanzi D200 Rust Driver (MQ-RUST-002)");
 
@@ -85,7 +88,12 @@ async fn main() -> Result<()> {
                     args.config.display(),
                     e
                 );
-                config::Config::default()
+                // Keep the resolved location so display-mode changes made via
+                // the action persist even when the file is missing or broken.
+                config::Config {
+                    filepath: Some(config::Config::resolve_path(&args.config)),
+                    ..config::Config::default()
+                }
             } else {
                 error!("Failed to load configuration: {}", e);
                 return Err(e);
@@ -104,7 +112,10 @@ async fn main() -> Result<()> {
             .register_event
             .clone()
             .unwrap_or_else(|| "register".to_string());
-        let info_str = args.info.clone().unwrap_or_else(|| "{}".to_string());
+        let info_str = args
+            .info
+            .clone()
+            .unwrap_or_else(|| r#"{"devices":[]}"#.to_string());
 
         info!("Starting in Plugin Mode (UUID: {}, Port: {})", uuid, port);
 
@@ -115,10 +126,7 @@ async fn main() -> Result<()> {
         // devices that connected before the websocket was ready.
         let known_devices: crate::openaction_client::KnownDevices =
             std::sync::Arc::new(tokio::sync::Mutex::new(Vec::new()));
-        let bridge = crate::openaction_client::OpenActionBridge::new(
-            cmd_tx,
-            known_devices.clone(),
-        );
+        let bridge = crate::openaction_client::OpenActionBridge::new(cmd_tx, known_devices.clone());
         bridge.register();
 
         let exe_name = std::env::current_exe()
@@ -148,7 +156,9 @@ async fn main() -> Result<()> {
         });
 
         // Register the action with the cycle sender
-        let cycle_action = action::CycleStatusWindow { cycle_tx: cycle_tx.clone() };
+        let cycle_action = action::CycleStatusWindow {
+            cycle_tx: cycle_tx.clone(),
+        };
         register_action(cycle_action).await;
 
         // Outbound events forwarder: HID -> OpenDeck.
@@ -212,7 +222,8 @@ async fn main() -> Result<()> {
 
     // 3. Start Daemon or One-Shot
     if args.daemon || args.plugin_uuid.is_some() {
-        let daemon = daemon::UlanziDaemon::new(config, plugin_cmd_rx, hw_event_tx, cycle_rx).await?;
+        let daemon =
+            daemon::UlanziDaemon::new(config, plugin_cmd_rx, hw_event_tx, cycle_rx).await?;
 
         if let Some(oa_handle) = openaction_handle {
             // Plugin mode: exit when EITHER the daemon or the OpenAction runtime finishes

@@ -7,13 +7,22 @@ use tokio::signal;
 use tokio::sync::mpsc;
 use tokio::time::{interval, sleep_until};
 
-use crate::config::WINDOW_MODE_STATUS;
-use crate::config::WINDOW_MODE_CLOCK;
-use crate::config::WINDOW_MODE_CLEAR;
 use crate::config::Config;
-use crate::device::{ButtonEvent, UlanziDevice, NUM_BUTTONS};
+use crate::config::WINDOW_MODE_CLEAR;
+use crate::config::WINDOW_MODE_CLOCK;
+use crate::config::WINDOW_MODE_STATUS;
+use crate::device::{ButtonEvent, NUM_BUTTONS, UlanziDevice};
 use crate::openaction_client::BridgeEvent;
 use crate::system_monitor::SystemMonitor;
+
+/// Debounce window after the last plugin command.
+const DEBOUNCE_DELAY: Duration = Duration::from_millis(50);
+/// Minimum spacing between two flush calls. Native per-button updates are
+/// small, so this only needs to let the firmware apply the previous transfer.
+const MIN_FLUSH_INTERVAL: Duration = Duration::from_millis(150);
+/// Delay before retrying a failed flush; the device keeps its dirty buttons.
+const FLUSH_RETRY_DELAY: Duration = Duration::from_millis(500);
+const FLUSH_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug, Clone)]
 pub enum HardwareEvent {
@@ -47,8 +56,6 @@ pub struct UlanziDaemon {
     // Last forwarded state per button — suppresses duplicate press/release
     // reports (phantom re-triggers) without affecting genuine taps.
     pressed_state: [Option<bool>; NUM_BUTTONS],
-    // True when staged button images changed and still need a ZIP upload.
-    images_dirty: bool,
 }
 
 impl UlanziDaemon {
@@ -86,12 +93,11 @@ impl UlanziDaemon {
             device_input_tx,
             flush_deadline: None,
             last_flush_time: None,
-            debounce_delay: Duration::from_millis(50),
-            min_flush_interval: Duration::from_millis(500),
+            debounce_delay: DEBOUNCE_DELAY,
+            min_flush_interval: MIN_FLUSH_INTERVAL,
             cycle_rx,
             last_window: None,
             pressed_state: [None; NUM_BUTTONS],
-            images_dirty: false,
         })
     }
 
@@ -331,66 +337,57 @@ impl UlanziDaemon {
         self.flush_deadline = Some(deadline);
     }
 
-    /// Perform the actual flush (send all staged button images to the device).
+    /// Perform the actual flush (send pending button changes to the device).
     /// Uses a timeout to avoid hanging, and logs errors without crashing.
     async fn perform_flush(&mut self) {
         self.flush_deadline = None;
 
-        // Skip the upload entirely when no image actually changed: a full
-        // ZIP re-send makes the firmware reload every icon and repaint the
-        // display, which briefly shows the *previous* small-window content
-        // (the "two apps are fighting for the screen" flash).
-        if !self.images_dirty {
-            crate::tlog!("FLUSH skipped (no image changed)");
-            return;
-        }
-
         let started = Instant::now();
         crate::tlog!("FLUSH begin");
 
-        // The icon ZIP is hundreds of 1024-byte HID writes. Linux hidraw
-        // links are much slower than Windows, so the previous 2s limit
-        // aborted transfers mid-stream (blank deck after start, page
-        // switches that only appeared after a key press). Allow 15s and
-        // retry on failure instead of dropping the pending images.
+        // `UlanziDevice::flush` transfers only the buttons that changed (or a
+        // full layout after connecting) and returns false when it is already
+        // up to date, so an unchanged page costs no HID traffic at all.
         let flush_future = async {
-            let mut all_ok = true;
+            let mut transferred = false;
             for device in self.devices.values() {
-                if let Err(e) = device.flush().await {
-                    info!("Failed to flush device {}: {}", device.get_id(), e);
-                    // Continue with other devices (if any) – don't break.
-                    all_ok = false;
+                match device.flush().await {
+                    Ok(did_work) => transferred |= did_work,
+                    Err(e) => {
+                        info!("Failed to flush device {}: {}", device.get_id(), e);
+                        return (false, transferred);
+                    }
                 }
             }
-            all_ok
+            (true, transferred)
         };
 
-        let success = match tokio::time::timeout(Duration::from_secs(15), flush_future).await {
-            Ok(true) => true,
-            Ok(false) => {
-                info!("Flush failed – keeping images dirty for retry");
-                false
-            }
+        let (success, transferred) = match tokio::time::timeout(FLUSH_TIMEOUT, flush_future).await {
+            Ok(result) => result,
             Err(_) => {
                 info!("Flush timed out after 15 seconds – device may be stuck; will retry");
-                false
+                (false, false)
             }
         };
 
         self.last_flush_time = Some(Instant::now());
         if success {
-            self.images_dirty = false;
-            // The repaint can clobber the small window — force the keep-alive
-            // to re-send the current frame within 100 ms.
-            self.last_window = None;
-            crate::tlog!("FLUSH done in {} ms", started.elapsed().as_millis());
+            if transferred {
+                // A repaint can clobber the small window — force the keep-alive
+                // to re-send the current frame within 100 ms.
+                self.last_window = None;
+                crate::tlog!("FLUSH done in {} ms", started.elapsed().as_millis());
+            } else {
+                crate::tlog!("FLUSH skipped (device already up to date)");
+            }
         } else {
-            // Keep images_dirty set and try again shortly; a partial ZIP
-            // is ignored by the firmware (sentinel comes last).
-            self.flush_deadline = Some(Instant::now() + Duration::from_millis(500));
+            // Keep the device's dirty set and try again shortly; a partial
+            // transfer is replaced by the next complete one.
+            self.flush_deadline = Some(Instant::now() + FLUSH_RETRY_DELAY);
             crate::tlog!(
-                "FLUSH failed after {} ms -> retry in 500 ms",
-                started.elapsed().as_millis()
+                "FLUSH failed after {} ms -> retry in {} ms",
+                started.elapsed().as_millis(),
+                FLUSH_RETRY_DELAY.as_millis()
             );
         }
     }
@@ -440,57 +437,65 @@ impl UlanziDaemon {
                 position,
                 image_base64,
             } => {
-                let dev = if let Some(d) = self.devices.get_mut(&device_id) {
-                    Some(d)
-                } else {
-                    self.devices.values_mut().next()
+                let index = position as usize;
+                // OpenDeck addresses a 5x3 grid (15 cells). The last cell is
+                // the second half of the wide button and is rendered together
+                // with index 13, so it carries no separate image.
+                if index >= NUM_BUTTONS {
+                    debug!(
+                        "SetImage: ignoring wide-button cell {} on {}",
+                        index, device_id
+                    );
+                    return;
+                }
+                let Some(dev) = self.devices.get_mut(&device_id) else {
+                    warn!("SetImage: no connected device for {}", device_id);
+                    return;
                 };
-                if let Some(dev) = dev {
-                    let index = position as usize;
-                    debug!("Setting image for button {} on {}", index, dev.get_id());
-                    match dev.set_button_image(index, &image_base64).await {
-                        Ok(true) => {
-                            self.images_dirty = true;
-                            crate::tlog!(
-                                "CMD SetImage device={} position={} len={} (staged)",
-                                dev.get_id(),
-                                index,
-                                image_base64.len()
-                            );
-                            debug!(
-                                "SetImage: device={} position={} image_len={} (staged)",
-                                dev.get_id(),
-                                index,
-                                image_base64.len()
-                            );
-                        }
-                        Ok(false) => {
-                            crate::tlog!(
-                                "CMD SetImage position={} (unchanged, no flush)",
-                                index
-                            );
-                            debug!("Image unchanged for button {}, skipping", index);
-                        }
-                        Err(e) => error!("Failed to set image: {}", e),
+
+                debug!("Setting image for button {} on {}", index, dev.get_id());
+                match dev.set_button_image(index, &image_base64).await {
+                    Ok(true) => {
+                        crate::tlog!(
+                            "CMD SetImage device={} position={} len={} (staged)",
+                            dev.get_id(),
+                            index,
+                            image_base64.len()
+                        );
+                        debug!(
+                            "SetImage: device={} position={} image_len={} (staged)",
+                            dev.get_id(),
+                            index,
+                            image_base64.len()
+                        );
                     }
-                } else {
-                    warn!("SetImage: No target device found for {}", device_id);
+                    Ok(false) => {
+                        crate::tlog!("CMD SetImage position={} (unchanged, no flush)", index);
+                        debug!("Image unchanged for button {}, skipping", index);
+                    }
+                    Err(e) => error!("Failed to set image: {}", e),
                 }
             }
             BridgeEvent::ClearImage {
                 device_id,
                 position,
             } => {
-                let dev = if let Some(d) = self.devices.get_mut(&device_id) {
-                    Some(d)
-                } else {
-                    self.devices.values_mut().next()
+                let index = position as usize;
+                if index >= NUM_BUTTONS {
+                    debug!(
+                        "ClearImage: ignoring wide-button cell {} on {}",
+                        index, device_id
+                    );
+                    return;
+                }
+                let Some(dev) = self.devices.get_mut(&device_id) else {
+                    warn!("ClearImage: no connected device for {}", device_id);
+                    return;
                 };
-                if let Some(dev) = dev {
-                    let index = position as usize;
-                    self.images_dirty = true;
+
+                if dev.clear_button_image(index) {
                     crate::tlog!(
-                        "CMD ClearImage device={} position={}",
+                        "CMD ClearImage device={} position={} (staged)",
                         dev.get_id(),
                         index
                     );
@@ -499,27 +504,25 @@ impl UlanziDaemon {
                         dev.get_id(),
                         index
                     );
-                    dev.clear_button_image(index);
                 } else {
-                    warn!("ClearImage: No target device found for {}", device_id);
+                    crate::tlog!(
+                        "CMD ClearImage device={} position={} (already empty)",
+                        dev.get_id(),
+                        index
+                    );
                 }
             }
             BridgeEvent::SetBrightness {
                 device_id,
                 brightness,
             } => {
-                let dev = if let Some(d) = self.devices.get_mut(&device_id) {
-                    Some(d)
-                } else {
-                    self.devices.values_mut().next()
+                let Some(dev) = self.devices.get_mut(&device_id) else {
+                    warn!("SetBrightness: no connected device for {}", device_id);
+                    return;
                 };
-                if let Some(dev) = dev {
-                    crate::tlog!("CMD SetBrightness={}", brightness);
-                    if let Err(e) = dev.set_brightness(brightness).await {
-                        error!("Failed to set brightness: {}", e);
-                    }
-                } else {
-                    warn!("SetBrightness: No target device found for {}", device_id);
+                crate::tlog!("CMD SetBrightness={}", brightness);
+                if let Err(e) = dev.set_brightness(brightness).await {
+                    error!("Failed to set brightness: {}", e);
                 }
             }
             BridgeEvent::DeviceConnected(_) | BridgeEvent::DeviceDisconnected(_) => {}
@@ -530,7 +533,7 @@ impl UlanziDaemon {
         let current = self.config.display_mode;
         let new_mode = match current {
             WINDOW_MODE_STATUS => WINDOW_MODE_CLOCK, // Status -> Clock
-            WINDOW_MODE_CLOCK => WINDOW_MODE_CLEAR, // Clock -> Clear
+            WINDOW_MODE_CLOCK => WINDOW_MODE_CLEAR,  // Clock -> Clear
             WINDOW_MODE_CLEAR => WINDOW_MODE_STATUS, // Clear -> Status
             _ => WINDOW_MODE_STATUS,
         };
@@ -542,7 +545,7 @@ impl UlanziDaemon {
         crate::tlog!("CYCLE mode {} -> {}", current, new_mode);
 
         // Convert to u8 for device command
-        let mode_byte = new_mode as u8;
+        let mode_byte = new_mode;
         let now = chrono::Local::now();
         let time_str = now.format("%H:%M:%S").to_string();
         let frame = (
@@ -554,13 +557,7 @@ impl UlanziDaemon {
         );
         for device in self.devices.values() {
             if let Err(e) = device
-                .set_small_window_data(
-                    frame.0,
-                    frame.1,
-                    frame.2,
-                    &frame.3,
-                    frame.4,
-                )
+                .set_small_window_data(frame.0, frame.1, frame.2, &frame.3, frame.4)
                 .await
             {
                 warn!("Failed to update small window after mode cycle: {}", e);
@@ -574,13 +571,7 @@ impl UlanziDaemon {
         tokio::time::sleep(Duration::from_millis(60)).await;
         for device in self.devices.values() {
             if let Err(e) = device
-                .set_small_window_data(
-                    frame.0,
-                    frame.1,
-                    frame.2,
-                    &frame.3,
-                    frame.4,
-                )
+                .set_small_window_data(frame.0, frame.1, frame.2, &frame.3, frame.4)
                 .await
             {
                 warn!("Failed to re-send small window frame: {}", e);
@@ -597,34 +588,38 @@ mod tests {
     use super::*;
     use tokio::sync::mpsc;
 
-    #[tokio::test]
-    async fn test_handle_device_event_keydown() {
-        let (hw_event_tx, mut hw_event_rx) = mpsc::channel(1);
-        let config = Config::default();
-        let (_device_input_tx, device_input_rx) = mpsc::channel(1);
-        let (device_input_tx_internal, _device_input_rx_internal) = mpsc::channel(1);
+    /// Build a daemon with no device and no plugin channel. The unused channel
+    /// ends are dropped; tests exercise the handlers directly.
+    fn test_daemon(hw_event_tx: Option<mpsc::Sender<HardwareEvent>>) -> UlanziDaemon {
+        let (_input_tx, device_input_rx) = mpsc::channel(1);
+        let (device_input_tx, _input_rx) = mpsc::channel(1);
         let (_cycle_tx, cycle_rx) = mpsc::channel(1);
 
-        let mut daemon = UlanziDaemon {
+        UlanziDaemon {
             devices: HashMap::new(),
-            config,
+            config: Config::default(),
             system_monitor: SystemMonitor::new(),
             cpu_usage: 0,
             mem_usage: 0,
             gpu_usage: 0,
             plugin_cmd_rx: None,
-            hw_event_tx: Some(hw_event_tx),
+            hw_event_tx,
             device_input_rx,
-            device_input_tx: device_input_tx_internal,
+            device_input_tx,
             flush_deadline: None,
             last_flush_time: None,
-            debounce_delay: Duration::from_millis(50),
-            min_flush_interval: Duration::from_millis(20),
+            debounce_delay: DEBOUNCE_DELAY,
+            min_flush_interval: MIN_FLUSH_INTERVAL,
             cycle_rx,
             last_window: None,
             pressed_state: [None; NUM_BUTTONS],
-            images_dirty: false,
-        };
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_device_event_keydown() {
+        let (hw_event_tx, mut hw_event_rx) = mpsc::channel(10);
+        let mut daemon = test_daemon(Some(hw_event_tx));
 
         let event = ButtonEvent {
             index: 5,
@@ -633,9 +628,11 @@ mod tests {
         };
         daemon.handle_device_event("test_device", event).await;
 
-        let received = hw_event_rx.recv().await.unwrap();
-        match received {
-            HardwareEvent::KeyDown { device_id, key_index } => {
+        match hw_event_rx.recv().await.unwrap() {
+            HardwareEvent::KeyDown {
+                device_id,
+                key_index,
+            } => {
                 assert_eq!(device_id, "test_device");
                 assert_eq!(key_index, 5);
             }
@@ -645,32 +642,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_device_event_keyup() {
-        let (hw_event_tx, mut hw_event_rx) = mpsc::channel(1);
-        let config = Config::default();
-        let (_device_input_tx, device_input_rx) = mpsc::channel(1);
-        let (device_input_tx_internal, _device_input_rx_internal) = mpsc::channel(1);
-        let (_cycle_tx, cycle_rx) = mpsc::channel(1);
-
-        let mut daemon = UlanziDaemon {
-            devices: HashMap::new(),
-            config,
-            system_monitor: SystemMonitor::new(),
-            cpu_usage: 0,
-            mem_usage: 0,
-            gpu_usage: 0,
-            plugin_cmd_rx: None,
-            hw_event_tx: Some(hw_event_tx),
-            device_input_rx,
-            device_input_tx: device_input_tx_internal,
-            flush_deadline: None,
-            last_flush_time: None,
-            debounce_delay: Duration::from_millis(50),
-            min_flush_interval: Duration::from_millis(20),
-            cycle_rx,
-            last_window: None,
-            pressed_state: [None; NUM_BUTTONS],
-            images_dirty: false,
-        };
+        let (hw_event_tx, mut hw_event_rx) = mpsc::channel(10);
+        let mut daemon = test_daemon(Some(hw_event_tx));
 
         let event = ButtonEvent {
             index: 3,
@@ -679,13 +652,59 @@ mod tests {
         };
         daemon.handle_device_event("test_device", event).await;
 
-        let received = hw_event_rx.recv().await.unwrap();
-        match received {
-            HardwareEvent::KeyUp { device_id, key_index } => {
+        match hw_event_rx.recv().await.unwrap() {
+            HardwareEvent::KeyUp {
+                device_id,
+                key_index,
+            } => {
                 assert_eq!(device_id, "test_device");
                 assert_eq!(key_index, 3);
             }
             _ => panic!("Expected KeyUp event"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_duplicate_press_is_suppressed() {
+        let (hw_event_tx, mut hw_event_rx) = mpsc::channel(10);
+        let mut daemon = test_daemon(Some(hw_event_tx));
+
+        let press = ButtonEvent {
+            index: 2,
+            pressed: true,
+            state: 1,
+        };
+        daemon.handle_device_event("test_device", press).await;
+        daemon.handle_device_event("test_device", press).await;
+
+        assert!(matches!(
+            hw_event_rx.try_recv(),
+            Ok(HardwareEvent::KeyDown { key_index: 2, .. })
+        ));
+        assert!(
+            hw_event_rx.try_recv().is_err(),
+            "duplicate press must be suppressed"
+        );
+    }
+
+    #[test]
+    fn test_schedule_flush_uses_debounce_and_min_interval() {
+        let mut daemon = test_daemon(None);
+
+        daemon.schedule_flush();
+        let first = daemon.flush_deadline.expect("deadline scheduled");
+        assert!(
+            first >= Instant::now() + DEBOUNCE_DELAY - Duration::from_millis(10),
+            "fresh flush should wait for the debounce window"
+        );
+
+        daemon.last_flush_time = Some(Instant::now());
+        daemon.flush_deadline = None;
+        daemon.schedule_flush();
+        let second = daemon.flush_deadline.expect("deadline scheduled");
+        assert!(
+            second >= Instant::now() + MIN_FLUSH_INTERVAL - Duration::from_millis(10),
+            "flush must respect the minimum interval since the last one"
+        );
     }
 }

@@ -1,12 +1,12 @@
 use log::info;
+use openaction::OpenActionResult;
 use openaction::async_trait;
 use openaction::global_events::{
-    set_global_event_handler, DeviceDidConnectEvent, DeviceDidDisconnectEvent, GlobalEventHandler,
-    SetBrightnessEvent, SetImageEvent,
+    DeviceDidConnectEvent, DeviceDidDisconnectEvent, GlobalEventHandler, SetBrightnessEvent,
+    SetImageEvent, set_global_event_handler,
 };
-use openaction::OpenActionResult;
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 
 /// Device registration parameters shared between the forwarder and `plugin_ready`.
 pub const DEVICE_NAME: &str = "Ulanzi D200";

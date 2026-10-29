@@ -47,7 +47,7 @@ try {
     Copy-Item -LiteralPath $ConfigYaml  -Destination (Join-Path $Dest "config.yaml")
     Copy-Item -LiteralPath $AssetsSrc   -Destination (Join-Path $Dest "assets") -Recurse
 
-    if (-not (Test-Path -LiteralPath $ZipName)) { Remove-Item -LiteralPath $ZipName -Force -ErrorAction SilentlyContinue }
+    if (Test-Path -LiteralPath $ZipName) { Remove-Item -LiteralPath $ZipName -Force }
 
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
