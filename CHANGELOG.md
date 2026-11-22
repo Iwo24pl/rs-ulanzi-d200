@@ -1,5 +1,9 @@
 # Fork releases (Iwo24pl/rs-ulanzi-d200)
 
+## 0.3.0
+* **Breaking:** the plugin id is now `io.github.Iwo24pl.rs-ulanzi-d200` (was `com.iwo24pl.rs-ulanzi-d200`). This covers the manifest `PluginUUID`, the action UUID (`… .cycle`), the `.sdPlugin` folder, the release zip and the icon asset.
+* OpenDeck treats the renamed plugin as a new plugin: after installing the update, remove the old `com.iwo24pl.rs-ulanzi-d200` entry and re-add the Screen Switch action. The binary name, device namespace (`e9`) and configuration format are unchanged.
+
 ## 0.2.0
 * Icon updates now use the device's native incremental protocol: the full layout is sent once per connect (`0x0001`), then only the buttons that changed are pushed (`0x000d`). A page switch no longer re-uploads all 14 icons, and the flush throttle dropped from 500 ms to 150 ms.
 * Removed the random padding, `sentinel.txt`, shuffled order and 1000-retry byte-offset workaround. The device accepts the clean configuration ZIP used by the official app (`Images/` + `manifest.json`).

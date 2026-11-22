@@ -36,7 +36,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: linux-zip
-          path: com.iwo24pl.rs-ulanzi-d200-linux.zip
+          path: io.github.Iwo24pl.rs-ulanzi-d200-linux.zip
 
   build-windows:
     runs-on: windows-latest
@@ -47,7 +47,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows-zip
-          path: com.iwo24pl.rs-ulanzi-d200-windows.zip
+          path: io.github.Iwo24pl.rs-ulanzi-d200-windows.zip
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -64,10 +64,10 @@ jobs:
         run: |
           command -v zip >/dev/null || (sudo apt-get update && sudo apt-get install -y zip)
           mkdir merged
-          unzip -q com.iwo24pl.rs-ulanzi-d200-linux.zip -d merged
-          unzip -q -o com.iwo24pl.rs-ulanzi-d200-windows.zip -d merged
-          ls -l merged/com.iwo24pl.rs-ulanzi-d200.sdPlugin
-          (cd merged && zip -qr ../com.iwo24pl.rs-ulanzi-d200.zip com.iwo24pl.rs-ulanzi-d200.sdPlugin)
+          unzip -q io.github.Iwo24pl.rs-ulanzi-d200-linux.zip -d merged
+          unzip -q -o io.github.Iwo24pl.rs-ulanzi-d200-windows.zip -d merged
+          ls -l merged/io.github.Iwo24pl.rs-ulanzi-d200.sdPlugin
+          (cd merged && zip -qr ../io.github.Iwo24pl.rs-ulanzi-d200.zip io.github.Iwo24pl.rs-ulanzi-d200.sdPlugin)
       - uses: softprops/action-gh-release@v2
         with:
-          files: com.iwo24pl.rs-ulanzi-d200.zip
+          files: io.github.Iwo24pl.rs-ulanzi-d200.zip

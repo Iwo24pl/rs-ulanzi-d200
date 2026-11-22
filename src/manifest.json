@@ -1,13 +1,13 @@
 {
   "Name": "Ulanzi D200",
   "Author": "glmagalhaes, mquest, mtesseract, Iwo24pl",
-  "Version": "0.2.0",
-  "Icon": "assets/com.iwo24pl.rs-ulanzi-d200.icon",
+  "Version": "0.3.0",
+  "Icon": "assets/io.github.Iwo24pl.rs-ulanzi-d200.icon",
   "Category": "Device",
   "Actions": [
     {
       "Name": "Screen Switch",
-      "UUID": "com.iwo24pl.rs-ulanzi-d200.cycle",
+      "UUID": "io.github.Iwo24pl.rs-ulanzi-d200.cycle",
       "Tooltip": "Switch modes of the status screen.",
       "Icon": "assets/cycle",
       "Controllers": ["Keypad"],
@@ -24,6 +24,6 @@
   },
   "CodePathWin": "rs-ulanzi-d200.exe",
   "CodePathLin": "rs-ulanzi-d200",
-  "PluginUUID": "com.iwo24pl.rs-ulanzi-d200",
+  "PluginUUID": "io.github.Iwo24pl.rs-ulanzi-d200",
   "DeviceNamespace": "e9"
 }
